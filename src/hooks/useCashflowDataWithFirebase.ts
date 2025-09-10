@@ -238,19 +238,58 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
         }
       }));
 
-      // Save to Firebase if available and we have a session
-      if (isFirebaseEnabled && currentSession) {
+      // Handle Firebase saving
+      if (isFirebaseEnabled) {
         setIsSaving(true);
-        const result = await saveTransactions(sortedTransactions, userId, currentSession.id);
-        if (!result.success) {
-          console.error('Failed to save transactions to Firebase:', result.error);
-          setError(`Warning: Failed to save to cloud: ${result.error.message}`);
+        
+        let sessionToUse = currentSession;
+        
+        // Create a new session if we don't have one
+        if (!sessionToUse) {
+          console.log('🆕 Creating new session for imported transactions');
+          const sessionName = `Import ${new Date().toLocaleDateString()}`;
+          const result = await createCashflowSession(
+            userId, 
+            sessionName, 
+            `Imported ${rawTransactions.length} transactions`,
+            startingBalance
+          );
+          
+          if (result.success) {
+            const newSessionId = result.data;
+            console.log('✅ New session created:', newSessionId);
+            
+            // Find the new session in our sessions list (reload sessions to get the new one)
+            const sessionsResult = await getCashflowSessions(userId);
+            if (sessionsResult.success) {
+              setSessions(sessionsResult.data);
+              sessionToUse = sessionsResult.data.find(s => s.id === newSessionId) || null;
+              
+              if (sessionToUse) {
+                setCurrentSession(sessionToUse);
+              }
+            }
+          } else {
+            console.error('❌ Failed to create session:', result.error);
+            setError(`Failed to create session: ${result.error.message}`);
+            setIsSaving(false);
+            return;
+          }
         }
+        
+        // Now save transactions to the session
+        if (sessionToUse) {
+          console.log('💾 Saving transactions to session:', sessionToUse.id);
+          const saveResult = await saveTransactions(sortedTransactions, userId, sessionToUse.id);
+          if (!saveResult.success) {
+            console.error('❌ Failed to save transactions to Firebase:', saveResult.error);
+            setError(`Warning: Failed to save to cloud: ${saveResult.error.message}`);
+          } else {
+            console.log('✅ Transactions saved successfully');
+          }
+        }
+        
         setIsSaving(false);
-      } else if (isFirebaseEnabled && !currentSession) {
-        // Create a new session for these transactions
-        const sessionName = `Import ${new Date().toLocaleDateString()}`;
-        await createNewSession(sessionName, `Imported ${rawTransactions.length} transactions`);
       }
 
     } catch (err) {
@@ -260,7 +299,7 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     } finally {
       setIsLoading(false);
     }
-  }, [isFirebaseEnabled, userId, currentSession, createNewSession]);
+  }, [isFirebaseEnabled, userId, currentSession, sessions]);
 
   const addEstimate = useCallback(async (estimateData: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newEstimate: Estimate = {
