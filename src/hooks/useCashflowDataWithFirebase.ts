@@ -96,15 +96,97 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
 
   // Load existing sessions on mount
   useEffect(() => {
-    if (isFirebaseEnabled) {
-      loadSessions();
-    }
-  }, [isFirebaseEnabled]);
+    console.log('🚀 App starting up, Firebase enabled:', isFirebaseEnabled);
+    
+    const initializeSessions = async () => {
+      if (!isFirebaseEnabled) {
+        console.log('⚠️ Firebase not enabled, sessions will not be loaded');
+        return;
+      }
+      
+      console.log('📂 Attempting to load sessions...');
+      try {
+        const result = await getCashflowSessions(userId);
+        console.log('📂 Session load result:', result);
+        
+        if (result.success) {
+          console.log(`✅ Found ${result.data.length} sessions`);
+          setSessions(result.data);
+          
+          // Log each session for debugging
+          result.data.forEach((session, index) => {
+            console.log(`📋 Session ${index + 1}:`, {
+              id: session.id,
+              name: session.name,
+              isActive: session.isActive,
+              transactionCount: session.transactionCount,
+              estimateCount: session.estimateCount
+            });
+          });
+          
+          // Auto-load the most recent active session
+          const activeSession = result.data.find(s => s.isActive) || result.data[0];
+          if (activeSession) {
+            console.log('🔄 Auto-loading session:', activeSession.name);
+            // Load session data inline to avoid dependency issues
+            console.log('📋 Loading session data for:', activeSession.id);
+            
+            setIsLoading(true);
+            const [transactionsResult, estimatesResult] = await Promise.all([
+              getTransactions(activeSession.id),
+              getEstimates(activeSession.id)
+            ]);
+            
+            console.log('📊 Transaction result:', transactionsResult.success ? `${transactionsResult.data.length} transactions` : transactionsResult.error);
+            console.log('📊 Estimates result:', estimatesResult.success ? `${estimatesResult.data.length} estimates` : estimatesResult.error);
+            
+            if (transactionsResult.success && estimatesResult.success) {
+              setCurrentSession(activeSession);
+              
+              setState(prev => ({
+                ...prev,
+                transactions: transactionsResult.data,
+                estimates: estimatesResult.data,
+                startingBalance: activeSession.startingBalance
+              }));
+              
+              console.log('✅ Session loaded successfully:', {
+                transactions: transactionsResult.data.length,
+                estimates: estimatesResult.data.length,
+                startingBalance: activeSession.startingBalance
+              });
+            } else {
+              const errorMessage = !transactionsResult.success 
+                ? transactionsResult.error.message 
+                : !estimatesResult.success 
+                ? estimatesResult.error.message
+                : 'Unknown error';
+              console.error('❌ Failed to load session data:', errorMessage);
+              setError(`Failed to load session data: ${errorMessage}`);
+            }
+            setIsLoading(false);
+          } else {
+            console.log('ℹ️ No sessions to auto-load');
+          }
+        } else {
+          console.error('❌ Failed to load sessions:', result.error);
+          setError(`Failed to load sessions: ${result.error.message}`);
+        }
+      } catch (error: any) {
+        console.error('💥 Error loading sessions:', error);
+        setError(`Error loading sessions: ${error.message}`);
+      }
+    };
+    
+    initializeSessions();
+  }, [isFirebaseEnabled, userId]);
 
   // Subscribe to real-time estimate updates
   useEffect(() => {
     if (isFirebaseEnabled && currentSession) {
+      console.log('🔄 Setting up real-time estimates subscription for session:', currentSession.id);
       const unsubscribe = subscribeToEstimates(currentSession.id, (estimates) => {
+        console.log('🔄 Received real-time estimate update:', estimates.length, 'estimates');
         setState(prev => ({ ...prev, estimates }));
       });
       
@@ -112,49 +194,46 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     }
   }, [isFirebaseEnabled, currentSession]);
 
-  const loadSessions = async () => {
-    if (!isFirebaseEnabled) return;
-    
-    try {
-      const result = await getCashflowSessions(userId);
-      if (result.success) {
-        setSessions(result.data);
-        // Auto-load the most recent active session
-        const activeSession = result.data.find(s => s.isActive) || result.data[0];
-        if (activeSession) {
-          await loadSession(activeSession.id);
-        }
-      } else {
-        console.error('Failed to load sessions:', result.error);
-      }
-    } catch (error) {
-      console.error('Error loading sessions:', error);
-    }
-  };
-
   const createNewSession = useCallback(async (name: string, description?: string) => {
+    console.log('🆕 Creating new session:', name);
+    
     if (!isFirebaseEnabled) {
+      console.log('⚠️ Firebase not enabled, cannot create session');
       setError('Firebase is not available. Data will only be stored locally.');
       return;
     }
 
     setIsSaving(true);
     try {
+      console.log('🔥 Calling createCashflowSession...');
       const result = await createCashflowSession(userId, name, description, state.startingBalance);
+      console.log('📋 Session creation result:', result);
+      
       if (result.success) {
+        console.log('✅ Session created successfully, ID:', result.data);
+        
         // Mark other sessions as inactive
         sessions.forEach(async (session) => {
           if (session.isActive) {
+            console.log('🔄 Marking session as inactive:', session.name);
             // In a real app, you'd update this in Firebase too
           }
         });
         
         // Reload sessions to get the new one
-        await loadSessions();
+        console.log('🔄 Reloading sessions after creation...');
+        const reloadResult = await getCashflowSessions(userId);
+        if (reloadResult.success) {
+          setSessions(reloadResult.data);
+          console.log(`✅ Sessions reloaded: ${reloadResult.data.length} total`);
+        }
+        console.log('🎉 Session creation complete');
       } else {
+        console.error('❌ Session creation failed:', result.error);
         setError(`Failed to create session: ${result.error.message}`);
       }
     } catch (error: any) {
+      console.error('💥 Error creating session:', error);
       setError(`Error creating session: ${error.message}`);
     } finally {
       setIsSaving(false);
@@ -162,19 +241,30 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
   }, [isFirebaseEnabled, userId, state.startingBalance, sessions]);
 
   const loadSession = useCallback(async (sessionId: string) => {
-    if (!isFirebaseEnabled) return;
+    console.log('📋 Loading session data for:', sessionId);
+    
+    if (!isFirebaseEnabled) {
+      console.log('⚠️ Firebase not enabled, cannot load session');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
 
     try {
+      console.log('💾 Fetching transactions and estimates...');
       const [transactionsResult, estimatesResult] = await Promise.all([
         getTransactions(sessionId),
         getEstimates(sessionId)
       ]);
+      
+      console.log('📊 Transaction result:', transactionsResult.success ? `${transactionsResult.data.length} transactions` : transactionsResult.error);
+      console.log('📊 Estimates result:', estimatesResult.success ? `${estimatesResult.data.length} estimates` : estimatesResult.error);
 
       if (transactionsResult.success && estimatesResult.success) {
         const session = sessions.find(s => s.id === sessionId);
+        console.log('🎯 Found session:', session ? session.name : 'Not found in sessions list');
+        
         setCurrentSession(session || null);
         
         setState(prev => ({
@@ -183,15 +273,23 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
           estimates: estimatesResult.data,
           startingBalance: session?.startingBalance || 0
         }));
+        
+        console.log('✅ Session loaded successfully:', {
+          transactions: transactionsResult.data.length,
+          estimates: estimatesResult.data.length,
+          startingBalance: session?.startingBalance || 0
+        });
       } else {
         const errorMessage = !transactionsResult.success 
           ? transactionsResult.error.message 
           : !estimatesResult.success 
           ? estimatesResult.error.message
           : 'Unknown error';
+        console.error('❌ Failed to load session data:', errorMessage);
         setError(`Failed to load session data: ${errorMessage}`);
       }
     } catch (error: any) {
+      console.error('💥 Error loading session:', error);
       setError(`Error loading session: ${error.message}`);
     } finally {
       setIsLoading(false);
