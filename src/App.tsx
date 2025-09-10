@@ -37,6 +37,10 @@ function App() {
     totalEstimatedOutflow
   } = useCashflowDataWithFirebase();
 
+  // Calculate totals locally
+  const totalTransactions = transactions.length;
+  const totalEstimates = estimates.length;
+
   const handleCSVUpload = async (rawTransactions: RawTransaction[]) => {
     await loadTransactions(rawTransactions);
     if (rawTransactions.length > 0) {
