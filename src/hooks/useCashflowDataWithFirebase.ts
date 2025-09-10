@@ -49,7 +49,8 @@ interface UseCashflowDataWithFirebaseReturn {
   addEstimate: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateEstimate: (id: string, updates: Partial<Estimate>) => Promise<void>;
   deleteEstimate: (id: string) => Promise<void>;
-  createSession: (name: string, description?: string) => Promise<void>;
+  createSession: (name: string, startingBalance: number) => Promise<void>;
+  renameSession: (sessionId: string, newName: string) => Promise<{ success: boolean; error?: string; data?: string }>;
   loadSessions: () => Promise<void>;
   switchSession: (session: FirebaseCashflowSession) => void;
   clearError: () => void;
@@ -202,7 +203,7 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     console.log('🔄 Switched to session:', session.name);
   }, []);
 
-  const createNewSession = useCallback(async (name: string, description?: string) => {
+  const createNewSession = useCallback(async (name: string, startingBalance: number) => {
     if (!hasValidAuth) {
       console.log('⚠️ Cannot create session: No authenticated user');
       return;
@@ -213,12 +214,10 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
       console.log('🔥 Calling createCashflowSession...');
       const result = await createCashflowSession(
         userId!, 
-        name, 
-        description || `Created ${new Date().toLocaleDateString()}`, 
-        state.startingBalance
+        name.trim(),
+        '', // description is optional, empty string
+        startingBalance
       );
-      console.log('📋 Session creation result:', result);
-      
       if (result.success) {
         console.log('✅ Session created successfully, ID:', result.data);
         await loadSessions();
@@ -228,16 +227,73 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
           setCurrentSession(newSession);
         }
       } else {
-        console.error('❌ Session creation failed:', result.error);
+        console.error('❌ Failed to create session:', result.error);
         setError(`Failed to create session: ${result.error.message}`);
       }
-    } catch (err) {
-      console.error('❌ Session creation error:', err);
-      setError('Failed to create session');
+    } catch (error: any) {
+      console.error('💥 Error creating session:', error);
+      const errorMessage = error.message || 'Unknown error occurred';
+      setError(`Error creating session: ${errorMessage}`);
     } finally {
       setIsSaving(false);
     }
   }, [hasValidAuth, userId, state.startingBalance, sessions]);
+
+  const renameSession = useCallback(async (sessionId: string, newName: string) => {
+    if (!hasValidAuth || !sessionId.trim() || !newName.trim()) {
+      console.log('⚠️ Cannot rename session: Invalid parameters');
+      return { success: false, error: 'Invalid session ID or name' };
+    }
+    
+    setIsSaving(true);
+    try {
+      // Find the session to rename
+      const sessionToRename = sessions.find(s => s.id === sessionId);
+      if (!sessionToRename) {
+        throw new Error('Session not found');
+      }
+      
+      // Update the session name
+      const updatedSession = {
+        ...sessionToRename,
+        name: newName.trim(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      const result = await createCashflowSession(
+        userId!,
+        newName.trim(),
+        sessionToRename.description || '',
+        sessionToRename.startingBalance
+      );
+      if (result.success) {
+        console.log('✅ Session renamed successfully:', newName);
+        // Reload sessions to get updated list
+        const sessionsResult = await getCashflowSessions(userId!);
+        if (sessionsResult.success) {
+          setSessions(sessionsResult.data);
+        }
+        
+        // Update current session if it was the one being renamed
+        if (currentSession?.id === sessionId) {
+          setCurrentSession(updatedSession);
+        }
+        
+        return { success: true, data: result.data };
+      } else {
+        console.error('❌ Failed to rename session:', result.error);
+        setError(`Failed to rename session: ${result.error.message}`);
+        return { success: false, error: result.error.message };
+      }
+    } catch (error: any) {
+      console.error('💥 Error renaming session:', error);
+      const errorMessage = error.message || 'Unknown error occurred';
+      setError(`Error renaming session: ${errorMessage}`);
+      return { success: false, error: errorMessage };
+    } finally {
+      setIsSaving(false);
+    }
+  }, [hasValidAuth, userId, sessions, currentSession]);
 
   const loadSessions = useCallback(async () => {
     if (!hasValidAuth) {
@@ -605,6 +661,7 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
       updateEstimate: async () => {},
       deleteEstimate: async () => {},
       createSession: async () => {},
+      renameSession: async () => ({ success: false, error: 'Firebase not available' }),
       loadSessions: async () => {},
       switchSession: () => {},
       clearError: () => {},
@@ -634,6 +691,7 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     updateEstimate: updateEstimateById,
     deleteEstimate: deleteEstimateById,
     createSession: createNewSession,
+    renameSession,
     loadSessions,
     switchSession,
     clearError,

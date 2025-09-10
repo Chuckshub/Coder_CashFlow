@@ -262,9 +262,10 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
         isOpen={modalState.isOpen}
         onClose={closeModal}
         onSave={handleSaveEstimate}
-        weekDate={new Date()} // TODO: Calculate proper week date
+        weekDate={weeklyCashflows.find(w => w.weekNumber === modalState.weekNumber)?.weekStart || new Date()}
         type={modalState.type}
         estimate={modalState.editingEstimate}
+        scenario="base"
         onDelete={modalState.editingEstimate ? () => {
           onDeleteEstimate(modalState.editingEstimate!.id);
           closeModal();

@@ -36,6 +36,7 @@ function AppContent() {
     updateEstimate,
     deleteEstimate,
     createSession,
+    renameSession,
     loadSessions,
     switchSession,
     clearError,
@@ -131,6 +132,7 @@ function AppContent() {
               sessions={sessions}
               currentSession={currentSession}
               onCreateSession={createSession}
+              onRenameSession={renameSession}
               onSwitchSession={switchSession}
               isLoading={isLoading}
               isSaving={isSaving}

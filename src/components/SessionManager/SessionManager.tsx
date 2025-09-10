@@ -5,123 +5,65 @@ import { formatCurrency } from '../../utils/dateUtils';
 interface SessionManagerProps {
   sessions: FirebaseCashflowSession[];
   currentSession: FirebaseCashflowSession | null;
-  onCreateSession: (name: string, description?: string) => void;
+  onCreateSession: (name: string, startingBalance: number) => Promise<void>;
+  onRenameSession: (sessionId: string, newName: string) => Promise<{ success: boolean; error?: string }>;
   onSwitchSession: (session: FirebaseCashflowSession) => void;
   isLoading: boolean;
   isSaving: boolean;
 }
 
-interface CreateSessionModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (name: string, description: string) => void;
-  isSaving: boolean;
-}
-
-const CreateSessionModal: React.FC<CreateSessionModalProps> = ({
-  isOpen,
-  onClose,
-  onSubmit,
-  isSaving
-}) => {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (name.trim()) {
-      onSubmit(name.trim(), description.trim());
-      setName('');
-      setDescription('');
-      onClose();
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Create New Cashflow Session
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-              disabled={isSaving}
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Session Name *
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., Q4 2024 Cashflow Analysis"
-                required
-                disabled={isSaving}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description (Optional)
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                rows={3}
-                placeholder="Brief description of this cashflow analysis..."
-                disabled={isSaving}
-              />
-            </div>
-
-            <div className="flex justify-end space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isSaving || !name.trim()}
-              >
-                {isSaving ? 'Creating...' : 'Create Session'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const SessionManager: React.FC<SessionManagerProps> = ({
   sessions,
   currentSession,
   onCreateSession,
+  onRenameSession,
   onSwitchSession,
   isLoading,
   isSaving
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSessionList, setShowSessionList] = useState(false);
+  const [newSessionName, setNewSessionName] = useState('');
+  const [newSessionBalance, setNewSessionBalance] = useState('');
+  const [editingSession, setEditingSession] = useState<string | null>(null);
+  const [editSessionName, setEditSessionName] = useState('');
+
+  const handleCreateSession = async () => {
+    if (!newSessionName.trim() || !newSessionBalance.trim()) return;
+    
+    try {
+      await onCreateSession(newSessionName.trim(), parseFloat(newSessionBalance));
+      setNewSessionName('');
+      setNewSessionBalance('');
+      setShowCreateModal(false);
+    } catch (error) {
+      console.error('Failed to create session:', error);
+    }
+  };
+
+  const startRenaming = (session: FirebaseCashflowSession) => {
+    setEditingSession(session.id);
+    setEditSessionName(session.name);
+  };
+
+  const handleRenameSession = async () => {
+    if (!editingSession || !editSessionName.trim()) return;
+    
+    try {
+      const result = await onRenameSession(editingSession, editSessionName.trim());
+      if (result.success) {
+        setEditingSession(null);
+        setEditSessionName('');
+      }
+    } catch (error) {
+      console.error('Failed to rename session:', error);
+    }
+  };
+
+  const cancelRenaming = () => {
+    setEditingSession(null);
+    setEditSessionName('');
+  };
 
   return (
     <>
@@ -162,9 +104,50 @@ const SessionManager: React.FC<SessionManagerProps> = ({
         {currentSession && (
           <div className="mt-4 p-3 bg-blue-50 rounded-lg">
             <div className="flex justify-between items-start">
-              <div>
-                <h4 className="font-medium text-blue-900">Current Session</h4>
-                <p className="text-blue-800 font-semibold">{currentSession.name}</p>
+              <div className="flex-1">
+                <div className="flex items-center space-x-2">
+                  <h4 className="font-medium text-blue-900">Current Session</h4>
+                  {editingSession !== currentSession.id && (
+                    <button
+                      onClick={() => startRenaming(currentSession)}
+                      className="text-blue-600 hover:text-blue-800 p-1 rounded transition-colors"
+                      title="Rename session"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                
+                {editingSession === currentSession.id ? (
+                  <div className="mt-2 flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={editSessionName}
+                      onChange={(e) => setEditSessionName(e.target.value)}
+                      className="flex-1 px-2 py-1 border border-blue-300 rounded text-blue-900 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      onKeyPress={(e) => e.key === 'Enter' && handleRenameSession()}
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleRenameSession}
+                      disabled={!editSessionName.trim() || isSaving}
+                      className="px-2 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={cancelRenaming}
+                      className="px-2 py-1 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-blue-800 font-semibold">{currentSession.name}</p>
+                )}
+                
                 {currentSession.description && (
                   <p className="text-sm text-blue-700 mt-1">{currentSession.description}</p>
                 )}
@@ -221,12 +204,80 @@ const SessionManager: React.FC<SessionManagerProps> = ({
         )}
       </div>
 
-      <CreateSessionModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSubmit={onCreateSession}
-        isSaving={isSaving}
-      />
+      {/* Create Session Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Create New Session</h3>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleCreateSession(); }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Session Name *
+                </label>
+                <input
+                  type="text"
+                  value={newSessionName}
+                  onChange={(e) => setNewSessionName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter session name"
+                  disabled={isSaving}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Starting Balance *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 sm:text-sm">$</span>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newSessionBalance}
+                    onChange={(e) => setNewSessionBalance(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0.00"
+                    disabled={isSaving}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  disabled={isSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newSessionName.trim() || !newSessionBalance.trim() || isSaving}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSaving ? 'Creating...' : 'Create Session'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 };
