@@ -151,6 +151,7 @@ function AppContent() {
           <div className="px-4 sm:px-0">
             <CashflowTable
               weeklyCashflows={weeklyCashflows}
+              transactions={transactions}
               onAddEstimate={addEstimate}
               onUpdateEstimate={updateEstimate}
               onDeleteEstimate={deleteEstimate}

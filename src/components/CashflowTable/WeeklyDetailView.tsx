@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { WeeklyCashflow, Transaction, Estimate } from '../../types';
-import { formatCurrency, formatWeekRange, getCurrencyColor } from '../../utils/dateUtils';
+import { formatCurrency, formatWeekRange, getCurrencyColor, isDateInWeek } from '../../utils/dateUtils';
 
 interface WeeklyDetailViewProps {
   weeklyCashflows: WeeklyCashflow[];
@@ -22,19 +22,17 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
   transactions,
   onClose
 }) => {
-  const [selectedWeek, setSelectedWeek] = useState(1);
+  const [selectedWeek, setSelectedWeek] = useState(0); // Start with Week 0 (current week)
   const [activeTab, setActiveTab] = useState<'inflow' | 'outflow'>('inflow');
 
   const selectedWeekData = weeklyCashflows.find(w => w.weekNumber === selectedWeek);
   
   if (!selectedWeekData) return null;
 
-  // Get transactions for this week
-  const weekTransactions = transactions.filter(transaction => {
-    const transactionDate = transaction.date;
-    return transactionDate >= selectedWeekData.weekStart && 
-           transactionDate <= selectedWeekData.weekEnd;
-  });
+  // Get transactions for this week using proper date comparison
+  const weekTransactions = transactions.filter(transaction => 
+    isDateInWeek(transaction.date, selectedWeekData.weekStart)
+  );
 
   // Get estimates for this week
   const weekEstimates = selectedWeekData.estimates;

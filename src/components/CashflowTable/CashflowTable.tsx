@@ -6,6 +6,7 @@ import WeeklyDetailView from './WeeklyDetailView';
 
 interface CashflowTableProps {
   weeklyCashflows: WeeklyCashflow[];
+  transactions: Transaction[];
   onAddEstimate: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateEstimate: (id: string, estimate: Partial<Estimate>) => void;
   onDeleteEstimate: (id: string) => void;
@@ -20,6 +21,7 @@ interface ModalState {
 
 const CashflowTable: React.FC<CashflowTableProps> = ({
   weeklyCashflows,
+  transactions,
   onAddEstimate,
   onUpdateEstimate,
   onDeleteEstimate
@@ -275,7 +277,7 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
       {showDetailView && (
         <WeeklyDetailView
           weeklyCashflows={weeklyCashflows}
-          transactions={[]}
+          transactions={transactions}
           onClose={() => setShowDetailView(false)}
         />
       )}
