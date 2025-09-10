@@ -29,6 +29,7 @@ import {
   subscribeToEstimates,
   clearSessionData
 } from '../services/database';
+import { getCurrentUserId } from '../contexts/AuthContext';
 import { isFirebaseAvailable, FirebaseCashflowSession } from '../services/firebase';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -42,19 +43,18 @@ interface UseCashflowDataWithFirebaseReturn {
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
-  isFirebaseEnabled: boolean;
 
   // Actions
   loadTransactions: (rawTransactions: RawTransaction[]) => Promise<void>;
   addEstimate: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
-  updateEstimateById: (id: string, updates: Partial<Estimate>) => Promise<void>;
-  deleteEstimateById: (id: string) => Promise<void>;
-  createNewSession: (name: string, description?: string) => Promise<void>;
-  loadSession: (sessionId: string) => Promise<void>;
-  clearCurrentSession: () => Promise<void>;
+  updateEstimate: (id: string, updates: Partial<Estimate>) => Promise<void>;
+  deleteEstimate: (id: string) => Promise<void>;
+  createSession: (name: string, description?: string) => Promise<void>;
+  loadSessions: () => Promise<void>;
+  switchSession: (session: FirebaseCashflowSession) => void;
   clearError: () => void;
   reset: () => void;
-
+  
   // Computed values
   startingBalance: number;
   totalActualInflow: number;
@@ -81,16 +81,6 @@ const INITIAL_STATE: AppState = {
   startingBalance: 0
 };
 
-// Simple user ID for demo purposes (in production, use Firebase Auth)
-const getUserId = (): string => {
-  let userId = localStorage.getItem('cashflow_user_id');
-  if (!userId) {
-    userId = uuidv4();
-    localStorage.setItem('cashflow_user_id', userId);
-  }
-  return userId;
-};
-
 export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn => {
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [sessions, setSessions] = useState<FirebaseCashflowSession[]>([]);
@@ -98,11 +88,17 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [userId] = useState(() => getUserId());
+  const userId = getCurrentUserId();
   const isFirebaseEnabled = isFirebaseAvailable();
+  const hasValidAuth = !!(userId && isFirebaseEnabled);
 
   // Load existing sessions on mount
   useEffect(() => {
+    if (!hasValidAuth) {
+      console.log('⚠️ No authenticated user or Firebase not available');
+      return;
+    }
+    
     console.log('🚀 App starting up, Firebase enabled:', isFirebaseEnabled);
     
     const initializeSessions = async () => {
@@ -186,7 +182,7 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     };
     
     initializeSessions();
-  }, [isFirebaseEnabled, userId]);
+  }, [isFirebaseEnabled, hasValidAuth]);
 
   // Subscribe to real-time estimate updates
   useEffect(() => {
@@ -201,20 +197,22 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     }
   }, [isFirebaseEnabled, currentSession]);
 
+  const switchSession = useCallback((session: FirebaseCashflowSession) => {
+    setCurrentSession(session);
+    console.log('🔄 Switched to session:', session.name);
+  }, []);
+
   const createNewSession = useCallback(async (name: string, description?: string) => {
-    console.log('🆕 Creating new session:', name);
-    
-    if (!isFirebaseEnabled) {
-      console.log('⚠️ Firebase not enabled, cannot create session');
-      setError('Firebase is not available. Data will only be stored locally.');
+    if (!hasValidAuth) {
+      console.log('⚠️ Cannot create session: No authenticated user');
       return;
     }
-
+    
     setIsSaving(true);
     try {
       console.log('🔥 Calling createCashflowSession...');
       const result = await createCashflowSession(
-        userId, 
+        userId!, 
         name, 
         description || `Created ${new Date().toLocaleDateString()}`, 
         state.startingBalance
@@ -223,36 +221,49 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
       
       if (result.success) {
         console.log('✅ Session created successfully, ID:', result.data);
-        
-        // Mark other sessions as inactive
-        sessions.forEach(async (session) => {
-          if (session.isActive) {
-            console.log('🔄 Marking session as inactive:', session.name);
-            // In a real app, you'd update this in Firebase too
-          }
-        });
-        
-        // Reload sessions to get the new one
-        console.log('🔄 Reloading sessions after creation...');
-        const reloadResult = await getCashflowSessions(userId);
-        if (reloadResult.success) {
-          setSessions(reloadResult.data);
-          console.log(`✅ Sessions reloaded: ${reloadResult.data.length} total`);
+        await loadSessions();
+        // Find and switch to the new session
+        const newSession = sessions.find(s => s.id === result.data);
+        if (newSession) {
+          setCurrentSession(newSession);
         }
-        console.log('🎉 Session creation complete');
       } else {
         console.error('❌ Session creation failed:', result.error);
         setError(`Failed to create session: ${result.error.message}`);
       }
-    } catch (error: any) {
-      console.error('💥 Error creating session:', error);
-      setError(`Error creating session: ${error.message}`);
+    } catch (err) {
+      console.error('❌ Session creation error:', err);
+      setError('Failed to create session');
     } finally {
       setIsSaving(false);
     }
-  }, [isFirebaseEnabled, userId, state.startingBalance, sessions]);
+  }, [hasValidAuth, userId, state.startingBalance, sessions]);
 
-  const loadSession = useCallback(async (sessionId: string) => {
+  const loadSessions = useCallback(async () => {
+    if (!hasValidAuth) {
+      console.log('⚠️ Cannot load sessions: No authenticated user');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const result = await getCashflowSessions(userId!);
+      if (result.success) {
+        console.log(`✅ Found ${result.data.length} sessions`);
+        setSessions(result.data);
+      } else {
+        console.error('❌ Failed to load sessions:', result.error);
+        setError(`Failed to load sessions: ${result.error.message}`);
+      }
+    } catch (err) {
+      console.error('❌ Error loading sessions:', err);
+      setError('Failed to load sessions');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [hasValidAuth, userId]);
+
+  const loadTransaction = useCallback(async (sessionId: string) => {
     console.log('📋 Loading session data for:', sessionId);
     
     if (!isFirebaseEnabled) {
@@ -309,6 +320,11 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
   }, [isFirebaseEnabled, sessions]);
 
   const loadTransactions = useCallback(async (rawTransactions: RawTransaction[]) => {
+    if (!hasValidAuth) {
+      console.log('⚠️ Cannot load transactions: No authenticated user');
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
@@ -409,9 +425,14 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     } finally {
       setIsLoading(false);
     }
-  }, [isFirebaseEnabled, userId, currentSession, sessions]);
+  }, [isFirebaseEnabled, userId, currentSession, sessions, hasValidAuth]);
 
   const addEstimate = useCallback(async (estimateData: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (!hasValidAuth) {
+      console.log('⚠️ Cannot add estimate: No authenticated user');
+      return;
+    }
+    
     const newEstimate: Estimate = {
       ...estimateData,
       id: uuidv4(),
@@ -439,7 +460,7 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
       }
       setIsSaving(false);
     }
-  }, [isFirebaseEnabled, userId, currentSession]);
+  }, [userId, currentSession, hasValidAuth]);
 
   const updateEstimateById = useCallback(async (id: string, updates: Partial<Estimate>) => {
     // Update local state immediately
@@ -568,6 +589,34 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     };
   }, [state.transactions, state.estimates]);
 
+  // Fallback return for unauthenticated users
+  if (!hasValidAuth) {
+    return {
+      transactions: [],
+      estimates: [],
+      weeklyCashflows: [],
+      sessions: [],
+      currentSession: null,
+      isLoading: false,
+      isSaving: false,
+      error: userId ? 'Firebase not available' : 'No authenticated user',
+      loadTransactions: async () => {},
+      addEstimate: async () => {},
+      updateEstimate: async () => {},
+      deleteEstimate: async () => {},
+      createSession: async () => {},
+      loadSessions: async () => {},
+      switchSession: () => {},
+      clearError: () => {},
+      reset: () => {},
+      startingBalance: 0,
+      totalActualInflow: 0,
+      totalActualOutflow: 0,
+      totalEstimatedInflow: 0,
+      totalEstimatedOutflow: 0
+    };
+  }
+
   return {
     // State
     transactions: state.transactions,
@@ -578,19 +627,23 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     isLoading,
     isSaving,
     error,
-    isFirebaseEnabled,
 
     // Actions
     loadTransactions,
     addEstimate,
-    updateEstimateById,
-    deleteEstimateById,
-    createNewSession,
-    loadSession,
-    clearCurrentSession,
+    updateEstimate: updateEstimateById,
+    deleteEstimate: deleteEstimateById,
+    createSession: createNewSession,
+    loadSessions,
+    switchSession,
     clearError,
-    reset,
-
+    reset: () => {
+      setState(INITIAL_STATE);
+      setSessions([]);
+      setCurrentSession(null);
+      setError(null);
+    },
+    
     // Computed values
     startingBalance: state.startingBalance,
     ...computedValues

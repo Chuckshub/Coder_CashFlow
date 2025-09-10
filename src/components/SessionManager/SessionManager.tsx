@@ -6,9 +6,8 @@ interface SessionManagerProps {
   sessions: FirebaseCashflowSession[];
   currentSession: FirebaseCashflowSession | null;
   onCreateSession: (name: string, description?: string) => void;
-  onLoadSession: (sessionId: string) => void;
-  onClearSession: () => void;
-  isFirebaseEnabled: boolean;
+  onSwitchSession: (session: FirebaseCashflowSession) => void;
+  isLoading: boolean;
   isSaving: boolean;
 }
 
@@ -117,31 +116,12 @@ const SessionManager: React.FC<SessionManagerProps> = ({
   sessions,
   currentSession,
   onCreateSession,
-  onLoadSession,
-  onClearSession,
-  isFirebaseEnabled,
+  onSwitchSession,
+  isLoading,
   isSaving
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSessionList, setShowSessionList] = useState(false);
-
-  if (!isFirebaseEnabled) {
-    return (
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-        <div className="flex items-center">
-          <svg className="w-5 h-5 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.232 15.5c-.77.833.192 2.5 1.732 2.5z" />
-          </svg>
-          <div>
-            <h3 className="text-sm font-medium text-yellow-800">Local Storage Only</h3>
-            <p className="text-sm text-yellow-700 mt-1">
-              Firebase is not configured. Data will only be stored locally and may be lost.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -172,13 +152,9 @@ const SessionManager: React.FC<SessionManagerProps> = ({
             
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center space-x-1"
-              disabled={isSaving}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              <span>New Session</span>
+              New Session
             </button>
           </div>
         </div>
@@ -198,14 +174,6 @@ const SessionManager: React.FC<SessionManagerProps> = ({
                   <span>Balance: {formatCurrency(currentSession.startingBalance)}</span>
                 </div>
               </div>
-              
-              <button
-                onClick={onClearSession}
-                className="text-red-600 hover:text-red-800 text-sm font-medium"
-                disabled={isSaving}
-              >
-                Clear Data
-              </button>
             </div>
           </div>
         )}
@@ -215,14 +183,17 @@ const SessionManager: React.FC<SessionManagerProps> = ({
             <h4 className="font-medium text-gray-900 mb-3">Available Sessions</h4>
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {sessions.map(session => (
-                <div
+                <button
                   key={session.id}
-                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                  onClick={() => {
+                    onSwitchSession(session);
+                    setShowSessionList(false);
+                  }}
+                  className={`block w-full text-left px-4 py-3 text-sm border-b border-gray-100 last:border-b-0 transition-colors ${
                     currentSession?.id === session.id
-                      ? 'border-blue-300 bg-blue-50'
-                      : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                      ? 'bg-blue-50 text-blue-700 font-medium'
+                      : 'text-gray-700 hover:bg-gray-50'
                   }`}
-                  onClick={() => onLoadSession(session.id)}
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -243,7 +214,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>
