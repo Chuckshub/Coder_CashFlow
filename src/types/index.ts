@@ -78,36 +78,31 @@ export interface Estimate {
 // Rolling week status for continuous timeline
 export type WeekStatus = 'past' | 'current' | 'future';
 
-// Enhanced Weekly cashflow data with rolling timeline support
+// Weekly cashflow data
 export interface WeeklyCashflow {
-  weekNumber: number; // relative to current week (-4 to +8)
+  weekNumber: number;
   weekStart: Date;
   weekEnd: Date;
   weekStatus: WeekStatus;
-  
-  // Actual data (for past/current weeks)
   actualInflow: number;
   actualOutflow: number;
-  
-  // Estimated data (for current/future weeks)
   estimatedInflow: number;
   estimatedOutflow: number;
-  
-  // Combined totals (actual OR estimated based on week status)
   totalInflow: number;
   totalOutflow: number;
   netCashflow: number;
   runningBalance: number;
-  
-  // Associated data
-  transactions: Transaction[]; // actual transactions for this week
-  estimates: Estimate[]; // estimates for this week in active scenario
-  
-  // Accuracy tracking (for past weeks)
-  estimateAccuracy?: {
-    inflowVariance: number; // % difference between estimated and actual
-    outflowVariance: number;
-  };
+  estimates: Estimate[];
+  transactions: Transaction[];
+}
+
+// Rolling week structure
+export interface RollingWeek {
+  weekNumber: number; // -1, 0, 1, 2, ..., 13
+  weekStart: Date;
+  weekEnd: Date;
+  status: WeekStatus;
+  label: string; // "Last Week", "Current Week", "Week +1", etc.
 }
 
 // Scenario comparison data

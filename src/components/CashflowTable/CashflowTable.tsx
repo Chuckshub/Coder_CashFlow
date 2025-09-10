@@ -171,8 +171,15 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
                 <tr key={weekData.weekNumber} className="hover:bg-gray-50">
                   <td className="px-4 py-3 border-r border-gray-200">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        Week {weekData.weekNumber}
+                      <div className={`text-sm font-medium ${
+                        weekData.weekNumber === 0 ? 'text-blue-600' :
+                        weekData.weekNumber < 0 ? 'text-gray-600' :
+                        'text-gray-900'
+                      }`}>
+                        {weekData.weekNumber === -1 ? 'Last Week' :
+                         weekData.weekNumber === 0 ? 'Current Week' :
+                         weekData.weekNumber > 0 ? `Week +${weekData.weekNumber}` :
+                         `Week ${weekData.weekNumber}`}
                       </div>
                       <div className="text-xs text-gray-500">
                         {formatWeekRange(weekData.weekStart)}

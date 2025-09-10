@@ -16,7 +16,8 @@ import {
   WeeklyCashflow, 
   WeekStatus, 
   RollingTimelineConfig,
-  ScenarioComparison
+  ScenarioComparison,
+  RollingWeek
 } from '../types';
 import { getWeekStart, getWeekEnd, isDateInWeek } from './dateUtils';
 
@@ -28,40 +29,34 @@ export const DEFAULT_ROLLING_CONFIG: RollingTimelineConfig = {
 };
 
 // Generate rolling weeks array with relative week numbers
-export const generateRollingWeeks = (
-  config: RollingTimelineConfig = DEFAULT_ROLLING_CONFIG
-): Array<{
-  weekNumber: number;
-  weekStart: Date;
-  weekEnd: Date;
-  weekStatus: WeekStatus;
-}> => {
-  const weeks = [];
-  const currentWeekStart = getWeekStart(config.currentDate);
+export const generateRollingWeeks = (baseDate: Date = new Date()): RollingWeek[] => {
+  const weeks: RollingWeek[] = [];
+  const currentWeekStart = startOfWeek(baseDate, { weekStartsOn: 1 }); // Monday start
   
-  // Generate weeks from -pastWeeks to +futureWeeks
-  const totalWeeks = config.pastWeeks + 1 + config.futureWeeks; // past + current + future
-  const startWeekNumber = -config.pastWeeks;
-  
-  for (let i = 0; i < totalWeeks; i++) {
-    const weekNumber = startWeekNumber + i;
-    const weekStart = addWeeks(currentWeekStart, weekNumber);
-    const weekEnd = getWeekEnd(weekStart);
+  // Generate from -1 week to +13 weeks (15 weeks total)
+  for (let i = -1; i <= 13; i++) {
+    const weekStart = addWeeks(currentWeekStart, i);
+    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
     
-    let weekStatus: WeekStatus;
-    if (weekNumber < 0) {
-      weekStatus = 'past';
-    } else if (weekNumber === 0) {
-      weekStatus = 'current';
+    // Determine week status based on week number
+    let status: WeekStatus;
+    if (i < 0) {
+      status = 'past';
+    } else if (i === 0) {
+      status = 'current';
     } else {
-      weekStatus = 'future';
+      status = 'future';
     }
     
     weeks.push({
-      weekNumber,
+      weekNumber: i,
       weekStart,
       weekEnd,
-      weekStatus
+      status,
+      label: i === 0 ? 'Current Week' : 
+             i === -1 ? 'Last Week' : 
+             i > 0 ? `Week +${i}` : 
+             `Week ${i}`
     });
   }
   
@@ -142,94 +137,68 @@ export const calculateRollingCashflows = (
   transactions: Transaction[],
   estimates: Estimate[],
   startingBalance: number,
-  activeScenario: string,
+  activeScenario: string = 'base',
   config: RollingTimelineConfig = DEFAULT_ROLLING_CONFIG
 ): WeeklyCashflow[] => {
-  const weeks = generateRollingWeeks(config);
+  const weeks = generateRollingWeeks(config.currentDate);
   const weeklyCashflows: WeeklyCashflow[] = [];
   let runningBalance = startingBalance;
-  
-  // Calculate starting balance by working backwards from past weeks
-  // Find the earliest week and calculate balance at that point
-  const firstWeek = weeks[0];
-  let adjustedStartingBalance = startingBalance;
-  
-  // Adjust starting balance by subtracting past weeks' net flows
-  for (const week of weeks) {
-    if (week.weekStatus === 'past') {
-      const weekTransactions = getTransactionsForWeek(transactions, week.weekStart);
-      const { inflow, outflow } = calculateActualFlows(weekTransactions);
-      const netFlow = inflow - outflow;
-      adjustedStartingBalance -= netFlow;
-    }
-  }
-  
-  runningBalance = adjustedStartingBalance;
-  
+
   weeks.forEach((week) => {
-    const weekTransactions = getTransactionsForWeek(transactions, week.weekStart);
-    const weekEstimates = getEstimatesForWeek(estimates, week.weekStart, activeScenario);
+    const { weekNumber, weekStart, weekEnd, status } = week;
+    
+    // Get actual transactions for this week
+    const weekTransactions = transactions.filter(transaction =>
+      isDateInWeek(transaction.date, weekStart)
+    );
+    
+    // Get estimates for this week in the active scenario
+    const weekEstimates = estimates.filter(estimate =>
+      estimate.scenario === activeScenario &&
+      isDateInWeek(estimate.weekDate, weekStart)
+    );
     
     // Calculate actual flows
-    const actualFlows = calculateActualFlows(weekTransactions);
+    const actualInflow = weekTransactions
+      .filter(t => t.type === 'inflow')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const actualOutflow = weekTransactions
+      .filter(t => t.type === 'outflow')
+      .reduce((sum, t) => sum + t.amount, 0);
     
     // Calculate estimated flows
-    const estimatedFlows = calculateEstimatedFlows(weekEstimates);
+    const estimatedInflow = weekEstimates
+      .filter(e => e.type === 'inflow')
+      .reduce((sum, e) => sum + e.amount, 0);
     
-    // Determine which values to use based on week status
-    let totalInflow: number;
-    let totalOutflow: number;
+    const estimatedOutflow = weekEstimates
+      .filter(e => e.type === 'outflow')
+      .reduce((sum, e) => sum + e.amount, 0);
     
-    if (week.weekStatus === 'past') {
-      // Use actual data for past weeks
-      totalInflow = actualFlows.inflow;
-      totalOutflow = actualFlows.outflow;
-    } else if (week.weekStatus === 'current') {
-      // For current week, use actual + remaining estimates
-      // (For now, we'll just use actual if available, otherwise estimates)
-      totalInflow = actualFlows.inflow > 0 ? actualFlows.inflow : estimatedFlows.inflow;
-      totalOutflow = actualFlows.outflow > 0 ? actualFlows.outflow : estimatedFlows.outflow;
-    } else {
-      // Use estimates for future weeks
-      totalInflow = estimatedFlows.inflow;
-      totalOutflow = estimatedFlows.outflow;
-    }
-    
+    // For past weeks (-1), use actuals; for current/future (0, +1, +2...), combine actual + estimates
+    const totalInflow = status === 'past' ? actualInflow : actualInflow + estimatedInflow;
+    const totalOutflow = status === 'past' ? actualOutflow : actualOutflow + estimatedOutflow;
     const netCashflow = totalInflow - totalOutflow;
+    
+    // Update running balance
     runningBalance += netCashflow;
     
-    // Calculate estimate accuracy for past weeks if estimates existed
-    let estimateAccuracy;
-    if (week.weekStatus === 'past' && (estimatedFlows.inflow > 0 || estimatedFlows.outflow > 0)) {
-      estimateAccuracy = calculateEstimateAccuracy(
-        actualFlows.inflow,
-        actualFlows.outflow,
-        estimatedFlows.inflow,
-        estimatedFlows.outflow
-      );
-    }
-    
     weeklyCashflows.push({
-      weekNumber: week.weekNumber,
-      weekStart: week.weekStart,
-      weekEnd: week.weekEnd,
-      weekStatus: week.weekStatus,
-      
-      actualInflow: actualFlows.inflow,
-      actualOutflow: actualFlows.outflow,
-      
-      estimatedInflow: estimatedFlows.inflow,
-      estimatedOutflow: estimatedFlows.outflow,
-      
+      weekNumber,
+      weekStart,
+      weekEnd,
+      weekStatus: status,
+      actualInflow,
+      actualOutflow,
+      estimatedInflow,
+      estimatedOutflow,
       totalInflow,
       totalOutflow,
       netCashflow,
       runningBalance,
-      
-      transactions: weekTransactions,
       estimates: weekEstimates,
-      
-      estimateAccuracy
+      transactions: weekTransactions
     });
   });
   
@@ -239,12 +208,12 @@ export const calculateRollingCashflows = (
 // Generate scenario comparison data
 export const generateScenarioComparison = (
   transactions: Transaction[],
-  estimates: Estimate[],
-  startingBalance: number,
+  allEstimates: Estimate[],
   scenarios: string[],
+  startingBalance: number,
   config: RollingTimelineConfig = DEFAULT_ROLLING_CONFIG
 ): ScenarioComparison[] => {
-  const weeks = generateRollingWeeks(config);
+  const weeks = generateRollingWeeks(config.currentDate);
   
   return weeks.map(week => {
     const scenarioData: { [scenarioName: string]: any } = {};
@@ -252,7 +221,7 @@ export const generateScenarioComparison = (
     scenarios.forEach(scenario => {
       const cashflows = calculateRollingCashflows(
         transactions,
-        estimates,
+        allEstimates,
         startingBalance,
         scenario,
         config

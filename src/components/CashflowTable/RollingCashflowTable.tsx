@@ -161,19 +161,10 @@ const RollingCashflowTable: React.FC<RollingCashflowTableProps> = ({
           </button>
         </div>
         
-        {/* Estimate Accuracy for Past Weeks */}
-        {weekData.weekStatus === 'past' && weekData.estimateAccuracy && estimatedValue > 0 && (
-          <div className="absolute bottom-1 left-1 text-xs">
-            <div className={`px-1 py-0.5 rounded text-white text-xs ${
-              Math.abs(weekData.estimateAccuracy[type === 'inflow' ? 'inflowVariance' : 'outflowVariance']) <= 10
-                ? 'bg-green-600'
-                : Math.abs(weekData.estimateAccuracy[type === 'inflow' ? 'inflowVariance' : 'outflowVariance']) <= 25
-                ? 'bg-yellow-600'
-                : 'bg-red-600'
-            }`}>
-              {weekData.estimateAccuracy[type === 'inflow' ? 'inflowVariance' : 'outflowVariance'] > 0 ? '+' : ''}
-              {weekData.estimateAccuracy[type === 'inflow' ? 'inflowVariance' : 'outflowVariance'].toFixed(0)}%
-            </div>
+        {/* Show estimates for current/future weeks */}
+        {(weekData.weekStatus === 'current' || weekData.weekStatus === 'future') && estimatedValue > 0 && (
+          <div className="text-xs text-blue-600 bg-blue-50 rounded px-1 py-0.5 mt-1">
+            Est: {formatCurrency(estimatedValue)}
           </div>
         )}
       </div>
