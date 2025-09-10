@@ -42,9 +42,10 @@ interface FirebaseCashflowSession {
 
 interface FirebaseTransaction {
   id: string;
+  hash: string;
   userId: string;
   sessionId: string;
-  date: string;
+  date: any; // Firestore timestamp
   description: string;
   amount: number;
   type: 'inflow' | 'outflow';
@@ -52,8 +53,8 @@ interface FirebaseTransaction {
   subcategory?: string;
   balance: number;
   rawData: any;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: any;
+  updatedAt: any;
 }
 
 interface FirebaseEstimate {
@@ -98,7 +99,7 @@ export type DatabaseResult<T> = {
 };
 
 // Helper function to handle database operations
-const withFirebase = async <T>(
+export const withFirebase = async <T>(
   operation: () => Promise<T>
 ): Promise<DatabaseResult<T>> => {
   if (!isFirebaseAvailable()) {
@@ -154,6 +155,7 @@ const transactionToFirebase = (
   const baseData = {
     userId,
     sessionId,
+    hash: transaction.hash,
     date: transaction.date.toISOString(),
     description: transaction.description,
     amount: transaction.amount,
@@ -175,6 +177,7 @@ const transactionToFirebase = (
 
 const transactionFromFirebase = (firebaseTransaction: FirebaseTransaction): Transaction => ({
   id: firebaseTransaction.id,
+  hash: firebaseTransaction.hash || '', // Add hash field with fallback
   date: new Date(firebaseTransaction.date),
   description: firebaseTransaction.description,
   amount: firebaseTransaction.amount,

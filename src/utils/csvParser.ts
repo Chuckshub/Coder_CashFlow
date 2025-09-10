@@ -1,6 +1,7 @@
 import Papa from 'papaparse';
 import { RawTransaction, Transaction } from '../types';
 import { parse, isValid } from 'date-fns';
+import { createTransactionHashFromRaw } from './transactionHash';
 
 export const parseCSVFile = (file: File): Promise<RawTransaction[]> => {
   return new Promise((resolve, reject) => {
@@ -144,6 +145,7 @@ export const convertToTransaction = (rawTransaction: RawTransaction): Transactio
   
   return {
     id: `${rawTransaction['Posting Date']}-${rawTransaction.Description.substring(0, 20)}-${Math.random().toString(36).substring(2, 9)}`,
+    hash: createTransactionHashFromRaw(rawTransaction),
     date: parseDate(rawTransaction['Posting Date']),
     description: rawTransaction.Description,
     amount: amount,

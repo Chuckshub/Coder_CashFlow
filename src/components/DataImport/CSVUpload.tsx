@@ -6,9 +6,10 @@ import { formatCurrency } from '../../utils/dateUtils';
 interface CSVUploadProps {
   onDataParsed: (transactions: RawTransaction[]) => void;
   onError: (error: string) => void;
+  onFileUpload?: (file: File) => Promise<void>; // New direct file upload handler
 }
 
-const CSVUpload: React.FC<CSVUploadProps> = ({ onDataParsed, onError }) => {
+const CSVUpload: React.FC<CSVUploadProps> = ({ onDataParsed, onError, onFileUpload }) => {
   const [uploadState, setUploadState] = useState<CSVUploadState>({
     isUploading: false,
     isProcessing: false,
@@ -30,6 +31,37 @@ const CSVUpload: React.FC<CSVUploadProps> = ({ onDataParsed, onError }) => {
       return;
     }
     
+    // If direct file upload handler is provided, use that
+    if (onFileUpload) {
+      setUploadState(prev => ({
+        ...prev,
+        isUploading: true,
+        error: null,
+        fileName: file.name
+      }));
+      
+      try {
+        await onFileUpload(file);
+        setUploadState({
+          isUploading: false,
+          isProcessing: false,
+          error: null,
+          previewData: [],
+          fileName: null
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+        setUploadState(prev => ({
+          ...prev,
+          isUploading: false,
+          error: errorMessage
+        }));
+        onError(errorMessage);
+      }
+      return;
+    }
+    
+    // Legacy preview-based approach
     setUploadState(prev => ({
       ...prev,
       isUploading: true,
@@ -46,8 +78,6 @@ const CSVUpload: React.FC<CSVUploadProps> = ({ onDataParsed, onError }) => {
         throw new Error(`Invalid CSV structure: ${validation.errors.join(', ')}`);
       }
       
-      // Store full data and show preview
-      setFullData(rawTransactions);
       setUploadState(prev => ({
         ...prev,
         isUploading: false,
@@ -65,7 +95,7 @@ const CSVUpload: React.FC<CSVUploadProps> = ({ onDataParsed, onError }) => {
       }));
       onError(errorMessage);
     }
-  }, [onError]);
+  }, [onError, onFileUpload]);
   
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();

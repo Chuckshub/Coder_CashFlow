@@ -12,6 +12,7 @@ export interface RawTransaction {
 // Processed transaction with categorization
 export interface Transaction {
   id: string;
+  hash: string; // Unique hash for duplicate detection
   date: Date;
   description: string;
   amount: number;
@@ -59,7 +60,7 @@ export interface CashflowSession {
   updatedAt: Date;
 }
 
-// Enhanced Estimate with scenario and specific week date
+// Estimate for cashflow projections
 export interface Estimate {
   id: string;
   amount: number;
@@ -67,8 +68,8 @@ export interface Estimate {
   category: string;
   description: string;
   notes?: string;
-  weekDate: Date; // specific week this estimate applies to
-  scenario: string; // which scenario this estimate belongs to
+  weekDate: Date; // Date of the week this estimate applies to
+  scenario: string; // Scenario identifier (e.g., 'base', 'optimistic', 'pessimistic')
   isRecurring: boolean;
   recurringType?: 'weekly' | 'bi-weekly' | 'monthly';
   createdAt: Date;
