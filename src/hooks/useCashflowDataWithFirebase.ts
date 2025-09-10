@@ -52,7 +52,7 @@ interface UseCashflowDataWithFirebaseReturn {
   createSession: (name: string, startingBalance: number) => Promise<void>;
   renameSession: (sessionId: string, newName: string) => Promise<{ success: boolean; error?: string; data?: string }>;
   loadSessions: () => Promise<void>;
-  switchSession: (session: FirebaseCashflowSession) => void;
+  switchSession: (session: FirebaseCashflowSession) => Promise<void>;
   clearError: () => void;
   reset: () => void;
   
@@ -198,9 +198,31 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     }
   }, [isFirebaseEnabled, currentSession]);
 
-  const switchSession = useCallback((session: FirebaseCashflowSession) => {
+  const switchSession = useCallback(async (session: FirebaseCashflowSession) => {
+    console.log('🔄 Switching to session:', session.name);
     setCurrentSession(session);
-    console.log('🔄 Switched to session:', session.name);
+    setIsLoading(true);
+    
+    try {
+      // Load transactions for this session
+      const transactionsResult = await getTransactions(session.id);
+      if (transactionsResult.success) {
+        console.log(`📊 Loaded ${transactionsResult.data.length} transactions for session:`, session.name);
+        setState(prev => ({
+          ...prev,
+          transactions: transactionsResult.data,
+          startingBalance: session.startingBalance
+        }));
+      } else {
+        console.error('❌ Failed to load transactions:', transactionsResult.error);
+        setError(`Failed to load session data: ${transactionsResult.error.message}`);
+      }
+    } catch (error: any) {
+      console.error('💥 Error switching session:', error);
+      setError(`Error switching session: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   const createNewSession = useCallback(async (name: string, startingBalance: number) => {
@@ -663,7 +685,7 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
       createSession: async () => {},
       renameSession: async () => ({ success: false, error: 'Firebase not available' }),
       loadSessions: async () => {},
-      switchSession: () => {},
+      switchSession: async () => {},
       clearError: () => {},
       reset: () => {},
       startingBalance: 0,

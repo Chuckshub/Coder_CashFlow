@@ -7,7 +7,7 @@ interface SessionManagerProps {
   currentSession: FirebaseCashflowSession | null;
   onCreateSession: (name: string, startingBalance: number) => Promise<void>;
   onRenameSession: (sessionId: string, newName: string) => Promise<{ success: boolean; error?: string }>;
-  onSwitchSession: (session: FirebaseCashflowSession) => void;
+  onSwitchSession: (session: FirebaseCashflowSession) => Promise<void>;
   isLoading: boolean;
   isSaving: boolean;
 }
@@ -168,9 +168,13 @@ const SessionManager: React.FC<SessionManagerProps> = ({
               {sessions.map(session => (
                 <button
                   key={session.id}
-                  onClick={() => {
-                    onSwitchSession(session);
-                    setShowSessionList(false);
+                  onClick={async () => {
+                    try {
+                      await onSwitchSession(session);
+                      setShowSessionList(false);
+                    } catch (error) {
+                      console.error('Failed to switch session:', error);
+                    }
                   }}
                   className={`block w-full text-left px-4 py-3 text-sm border-b border-gray-100 last:border-b-0 transition-colors ${
                     currentSession?.id === session.id
