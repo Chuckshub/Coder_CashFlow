@@ -3,6 +3,7 @@ import { RawTransaction } from './types';
 import CSVUpload from './components/DataImport/CSVUpload';
 import CashflowTable from './components/CashflowTable/CashflowTable';
 import SessionManager from './components/SessionManager/SessionManager';
+import FirebaseDebug from './components/common/FirebaseDebug';
 import { useCashflowDataWithFirebase } from './hooks/useCashflowDataWithFirebase';
 
 function App() {
@@ -139,6 +140,8 @@ function App() {
           </div>
         </div>
       )}
+      
+      <FirebaseDebug />
     </div>
   );
 }

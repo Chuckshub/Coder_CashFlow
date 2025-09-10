@@ -24,14 +24,26 @@ const validateConfig = () => {
     'REACT_APP_FIREBASE_APP_ID'
   ];
   
-  const missing = requiredKeys.filter(key => !process.env[key]);
+  console.log('🔍 Firebase Environment Variable Check:');
+  console.log('NODE_ENV:', process.env.NODE_ENV);
+  
+  const envStatus = requiredKeys.map(key => {
+    const value = process.env[key];
+    const status = value ? '✅' : '❌';
+    const displayValue = value ? `${value.substring(0, 10)}...` : 'undefined';
+    console.log(`${status} ${key}: ${displayValue}`);
+    return { key, hasValue: !!value };
+  });
+  
+  const missing = envStatus.filter(item => !item.hasValue).map(item => item.key);
   
   if (missing.length > 0) {
-    console.warn('Missing Firebase environment variables:', missing.join(', '));
-    console.warn('Firebase will be disabled. Add these to your Vercel environment variables.');
+    console.warn('❌ Missing Firebase environment variables:', missing.join(', '));
+    console.warn('🔧 Add these to your Vercel environment variables and redeploy.');
     return false;
   }
   
+  console.log('✅ All Firebase environment variables found!');
   return true;
 };
 
@@ -43,29 +55,41 @@ let isFirebaseEnabled = false;
 
 if (validateConfig()) {
   try {
+    console.log('🔥 Initializing Firebase...');
     app = initializeApp(firebaseConfig);
+    console.log('🔥 Firebase app initialized successfully');
+    
     db = getFirestore(app);
+    console.log('📋 Firestore initialized successfully');
+    
     auth = getAuth(app);
+    console.log('🔐 Firebase Auth initialized successfully');
+    
     isFirebaseEnabled = true;
     
-    console.log('Firebase initialized successfully');
+    console.log('✅ Firebase fully initialized and enabled!');
     
     // Connect to emulators in development
     if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_USE_FIREBASE_EMULATORS === 'true') {
       try {
         connectFirestoreEmulator(db, 'localhost', 8080);
         connectAuthEmulator(auth, 'http://localhost:9099');
-        console.log('Connected to Firebase emulators');
+        console.log('🛠️ Connected to Firebase emulators');
       } catch (error) {
-        console.log('Firebase emulators not available, using production');
+        console.log('📁 Firebase emulators not available, using production');
       }
     }
   } catch (error) {
-    console.error('Failed to initialize Firebase:', error);
+    console.error('❌ Failed to initialize Firebase:', error);
+    console.error('Error details:', {
+      name: (error as Error)?.name,
+      message: (error as Error)?.message,
+      code: (error as any)?.code
+    });
     isFirebaseEnabled = false;
   }
 } else {
-  console.log('Firebase disabled - environment variables not configured');
+  console.log('⚠️ Firebase disabled - environment variables not configured');
 }
 
 // Export Firebase services
