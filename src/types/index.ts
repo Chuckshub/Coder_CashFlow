@@ -40,21 +40,26 @@ export enum InflowCategory {
   OTHER_INCOME = 'Other Income'
 }
 
-// Weekly cashflow data
-export interface WeeklyCashflow {
-  weekNumber: number;
-  weekStart: Date;
-  weekEnd: Date;
-  actualInflow: number;
-  actualOutflow: number;
-  estimatedInflow: number;
-  estimatedOutflow: number;
-  netCashflow: number;
-  runningBalance: number;
-  estimates: Estimate[];
+// Enhanced Cashflow Session with continuous timeline support
+export interface CashflowSession {
+  id: string;
+  name: string;
+  description: string;
+  timeRange: {
+    startDate: Date;
+    endDate: Date;
+  };
+  scenarios: string[];
+  activeScenario: string;
+  startingBalance: number;
+  transactionCount: number;
+  estimateCount: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-// Estimate for cashflow projections
+// Enhanced Estimate with scenario and specific week date
 export interface Estimate {
   id: string;
   amount: number;
@@ -62,23 +67,81 @@ export interface Estimate {
   category: string;
   description: string;
   notes?: string;
-  weekNumber: number;
+  weekDate: Date; // specific week this estimate applies to
+  scenario: string; // which scenario this estimate belongs to
   isRecurring: boolean;
   recurringType?: 'weekly' | 'bi-weekly' | 'monthly';
   createdAt: Date;
   updatedAt: Date;
 }
 
-// Application state
+// Rolling week status for continuous timeline
+export type WeekStatus = 'past' | 'current' | 'future';
+
+// Enhanced Weekly cashflow data with rolling timeline support
+export interface WeeklyCashflow {
+  weekNumber: number; // relative to current week (-4 to +8)
+  weekStart: Date;
+  weekEnd: Date;
+  weekStatus: WeekStatus;
+  
+  // Actual data (for past/current weeks)
+  actualInflow: number;
+  actualOutflow: number;
+  
+  // Estimated data (for current/future weeks)
+  estimatedInflow: number;
+  estimatedOutflow: number;
+  
+  // Combined totals (actual OR estimated based on week status)
+  totalInflow: number;
+  totalOutflow: number;
+  netCashflow: number;
+  runningBalance: number;
+  
+  // Associated data
+  transactions: Transaction[]; // actual transactions for this week
+  estimates: Estimate[]; // estimates for this week in active scenario
+  
+  // Accuracy tracking (for past weeks)
+  estimateAccuracy?: {
+    inflowVariance: number; // % difference between estimated and actual
+    outflowVariance: number;
+  };
+}
+
+// Scenario comparison data
+export interface ScenarioComparison {
+  weekDate: Date;
+  scenarios: {
+    [scenarioName: string]: {
+      inflow: number;
+      outflow: number;
+      netCashflow: number;
+      runningBalance: number;
+    };
+  };
+}
+
+// Rolling timeline configuration
+export interface RollingTimelineConfig {
+  pastWeeks: number; // how many past weeks to show
+  futureWeeks: number; // how many future weeks to show
+  currentDate: Date; // anchor date for the timeline
+}
+
+// Enhanced application state for continuous model
 export interface AppState {
   transactions: Transaction[];
-  weeklyCashflows: WeeklyCashflow[];
   estimates: Estimate[];
+  weeklyCashflows: WeeklyCashflow[];
+  activeScenario: string;
+  availableScenarios: string[];
+  rollingConfig: RollingTimelineConfig;
   categories: {
     inflow: string[];
     outflow: string[];
   };
-  currentWeek: number;
   startingBalance: number;
 }
 

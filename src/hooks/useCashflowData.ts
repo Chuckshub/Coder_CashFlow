@@ -43,13 +43,19 @@ interface UseCashflowDataReturn {
 
 const INITIAL_STATE: AppState = {
   transactions: [],
-  weeklyCashflows: [],
   estimates: [],
+  weeklyCashflows: [],
+  activeScenario: 'base',
+  availableScenarios: ['base'],
+  rollingConfig: {
+    pastWeeks: 4,
+    futureWeeks: 8,
+    currentDate: new Date()
+  },
   categories: {
     inflow: [],
     outflow: []
   },
-  currentWeek: 1,
   startingBalance: 0
 };
 

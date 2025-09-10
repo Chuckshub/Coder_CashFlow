@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Estimate } from '../../types';
+import { formatRollingWeekRange } from '../../utils/rollingTimeline';
 
 interface EstimateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onDelete?: () => void;
-  weekNumber: number;
+  weekDate: Date;
   type: 'inflow' | 'outflow' | null;
   estimate?: Estimate;
+  scenario?: string;
 }
 
 const commonCategories = {
@@ -36,9 +38,10 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
   onClose,
   onSave,
   onDelete,
-  weekNumber,
+  weekDate,
   type,
-  estimate
+  estimate,
+  scenario = 'base'
 }) => {
   const [formData, setFormData] = useState({
     amount: '',
@@ -104,7 +107,8 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
       category: formData.category.trim(),
       description: formData.description.trim(),
       notes: formData.notes.trim() || undefined,
-      weekNumber,
+      weekDate,
+      scenario,
       isRecurring: formData.isRecurring,
       recurringType: formData.isRecurring ? formData.recurringType : undefined
     };
@@ -140,7 +144,7 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
 
           <div className="mb-4">
             <div className="text-sm text-gray-600 mb-2">
-              Week {weekNumber} • {type === 'inflow' ? 'Income' : 'Expense'}
+              {formatRollingWeekRange(weekDate)} • {type === 'inflow' ? 'Income' : 'Expense'}
             </div>
           </div>
 

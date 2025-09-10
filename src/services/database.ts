@@ -26,6 +26,57 @@ import {
 } from './firebase';
 import { Transaction, Estimate } from '../types';
 
+// Firebase document interfaces
+interface FirebaseCashflowSession {
+  id: string;
+  name: string;
+  description: string;
+  startDate: string; // ISO string
+  endDate: string; // ISO string
+  scenarios: string[];
+  activeScenario: string;
+  startingBalance: number;
+  transactionCount: number;
+  estimateCount: number;
+  isActive: boolean;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface FirebaseTransaction {
+  id: string;
+  userId: string;
+  sessionId: string;
+  date: string;
+  description: string;
+  amount: number;
+  type: 'inflow' | 'outflow';
+  category: string;
+  subcategory?: string;
+  balance: number;
+  rawData: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface FirebaseEstimate {
+  id: string;
+  userId: string;
+  sessionId: string;
+  amount: number;
+  type: 'inflow' | 'outflow';
+  category: string;
+  description: string;
+  notes?: string;
+  weekDate: string; // ISO string for specific week
+  scenario: string; // scenario name
+  isRecurring: boolean;
+  recurringType?: 'weekly' | 'bi-weekly' | 'monthly';
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Types for database operations
 export interface DatabaseError {
   code: string;
@@ -121,7 +172,8 @@ const estimateToFirebase = (
     type: estimate.type,
     category: estimate.category,
     description: estimate.description,
-    weekNumber: estimate.weekNumber,
+    weekDate: estimate.weekDate.toISOString(),
+    scenario: estimate.scenario,
     isRecurring: estimate.isRecurring,
     createdAt: estimate.createdAt.toISOString(),
     updatedAt: estimate.updatedAt.toISOString()
@@ -146,7 +198,8 @@ const estimateFromFirebase = (firebaseEstimate: FirebaseEstimate): Estimate => (
   category: firebaseEstimate.category,
   description: firebaseEstimate.description,
   notes: firebaseEstimate.notes,
-  weekNumber: firebaseEstimate.weekNumber,
+  weekDate: new Date(firebaseEstimate.weekDate),
+  scenario: firebaseEstimate.scenario,
   isRecurring: firebaseEstimate.isRecurring,
   recurringType: firebaseEstimate.recurringType,
   createdAt: new Date(firebaseEstimate.createdAt),
@@ -155,28 +208,56 @@ const estimateFromFirebase = (firebaseEstimate: FirebaseEstimate): Estimate => (
 
 // Cashflow Session Management
 export const createCashflowSession = async (
-  userId: string,
-  name: string,
-  description?: string,
-  startingBalance: number = 0
+  userId: string, 
+  name: string, 
+  description: string, 
+  startingBalance: number,
+  timeRange?: {
+    startDate: Date;
+    endDate: Date;
+  },
+  scenarios: string[] = ['base']
 ): Promise<DatabaseResult<string>> => {
-  return withFirebase(async () => {
+  if (!db) {
+    return {
+      success: false,
+      error: { code: 'firebase-not-initialized', message: 'Firebase not initialized' }
+    };
+  }
+
+  try {
+    const sessionRef = doc(collection(db, 'cashflow_sessions'));
+    const now = new Date();
+    
+    // Default time range: current date to 1 year forward
+    const defaultTimeRange = {
+      startDate: new Date(),
+      endDate: new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
+    };
+    
+    const finalTimeRange = timeRange || defaultTimeRange;
+    
     const sessionData: Omit<FirebaseCashflowSession, 'id'> = {
-      userId,
       name,
       description,
+      startDate: finalTimeRange.startDate.toISOString(),
+      endDate: finalTimeRange.endDate.toISOString(),
+      scenarios,
+      activeScenario: scenarios[0] || 'base',
       startingBalance,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      isActive: true,
       transactionCount: 0,
       estimateCount: 0,
-      dateRange: null
+      isActive: true,
+      userId,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
     };
 
-    const docRef = await addDoc(collection(db, COLLECTIONS.CASHFLOW_SESSIONS), sessionData);
-    return docRef.id;
-  });
+    await setDoc(sessionRef, sessionData);
+    return { success: true, data: sessionRef.id };
+  } catch (error: any) {
+    return handleDatabaseError(error);
+  }
 };
 
 export const getCashflowSessions = async (
