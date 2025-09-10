@@ -129,9 +129,6 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
           <div>
             <h2 className="text-2xl font-semibold text-gray-900">13-Week Cashflow Projection</h2>
             <p className="text-gray-600 mt-1">Click any cell to add estimates</p>
-            <div className="mt-2 text-sm text-blue-600">
-              ℹ️ Drag-and-drop functionality will be restored in the next update
-            </div>
           </div>
           <button
             onClick={() => setShowDetailView(true)}
