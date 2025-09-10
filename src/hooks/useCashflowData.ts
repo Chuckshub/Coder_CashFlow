@@ -12,9 +12,10 @@ import {
 import { 
   categorizeTransactions 
 } from '../utils/transactionCategorizer';
-import { 
-  calculateWeeklyCashflows 
-} from '../utils/dateUtils';
+import {
+  calculateRollingCashflows,
+  DEFAULT_ROLLING_CONFIG
+} from '../utils/rollingTimeline';
 import { v4 as uuidv4 } from 'uuid';
 
 interface UseCashflowDataReturn {
@@ -172,16 +173,18 @@ export const useCashflowData = (): UseCashflowDataReturn => {
     }
     
     try {
-      return calculateWeeklyCashflows(
+      return calculateRollingCashflows(
         state.transactions,
         state.estimates,
-        state.startingBalance
+        state.startingBalance,
+        state.activeScenario,
+        state.rollingConfig
       );
     } catch (err) {
       console.error('Error calculating weekly cashflows:', err);
       return [];
     }
-  }, [state.transactions, state.estimates, state.startingBalance]);
+  }, [state.transactions, state.estimates, state.startingBalance, state.activeScenario, state.rollingConfig]);
 
   // Computed values
   const computedValues = useMemo(() => {

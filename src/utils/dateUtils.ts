@@ -48,72 +48,18 @@ export const isDateInWeek = (date: Date, weekStart: Date): boolean => {
   });
 };
 
+/* 
+// DEPRECATED: Use calculateRollingCashflows from rollingTimeline.ts instead
 export const calculateWeeklyCashflows = (
   transactions: Transaction[],
   estimates: Estimate[],
   startingBalance: number,
   baseDate: Date = new Date()
 ): WeeklyCashflow[] => {
-  const weeks = generate13Weeks(baseDate);
-  const weeklyCashflows: WeeklyCashflow[] = [];
-  let runningBalance = startingBalance;
-  
-  weeks.forEach((weekStart, index) => {
-    const weekNumber = index + 1;
-    const weekEnd = getWeekEnd(weekStart);
-    
-    // Get actual transactions for this week
-    const weekTransactions = transactions.filter(transaction =>
-      isDateInWeek(transaction.date, weekStart)
-    );
-    
-    // Get estimates for this week
-    const weekEstimates = estimates.filter(estimate =>
-      estimate.weekNumber === weekNumber
-    );
-    
-    // Calculate actual flows
-    const actualInflow = weekTransactions
-      .filter(t => t.type === 'inflow')
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    const actualOutflow = weekTransactions
-      .filter(t => t.type === 'outflow')
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    // Calculate estimated flows
-    const estimatedInflow = weekEstimates
-      .filter(e => e.type === 'inflow')
-      .reduce((sum, e) => sum + e.amount, 0);
-    
-    const estimatedOutflow = weekEstimates
-      .filter(e => e.type === 'outflow')
-      .reduce((sum, e) => sum + e.amount, 0);
-    
-    // Calculate net cashflow (actual + estimated)
-    const totalInflow = actualInflow + estimatedInflow;
-    const totalOutflow = actualOutflow + estimatedOutflow;
-    const netCashflow = totalInflow - totalOutflow;
-    
-    // Update running balance
-    runningBalance += netCashflow;
-    
-    weeklyCashflows.push({
-      weekNumber,
-      weekStart,
-      weekEnd,
-      actualInflow,
-      actualOutflow,
-      estimatedInflow,
-      estimatedOutflow,
-      netCashflow,
-      runningBalance,
-      estimates: weekEstimates
-    });
-  });
-  
-  return weeklyCashflows;
+  // This function is deprecated - use calculateRollingCashflows instead
+  return [];
 };
+*/
 
 export const getTransactionsInDateRange = (
   transactions: Transaction[],

@@ -10,12 +10,13 @@ import {
   convertToTransaction,
   parseDate
 } from '../utils/csvParser';
-import {
-  categorizeTransactions
+import { 
+  categorizeTransactions 
 } from '../utils/transactionCategorizer';
 import {
-  calculateWeeklyCashflows
-} from '../utils/dateUtils';
+  calculateRollingCashflows,
+  DEFAULT_ROLLING_CONFIG
+} from '../utils/rollingTimeline';
 import {
   createCashflowSession,
   getCashflowSessions,
@@ -212,7 +213,12 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     setIsSaving(true);
     try {
       console.log('🔥 Calling createCashflowSession...');
-      const result = await createCashflowSession(userId, name, description, state.startingBalance);
+      const result = await createCashflowSession(
+        userId, 
+        name, 
+        description || `Created ${new Date().toLocaleDateString()}`, 
+        state.startingBalance
+      );
       console.log('📋 Session creation result:', result);
       
       if (result.success) {
@@ -523,16 +529,18 @@ export const useCashflowDataWithFirebase = (): UseCashflowDataWithFirebaseReturn
     }
 
     try {
-      return calculateWeeklyCashflows(
+      return calculateRollingCashflows(
         state.transactions,
         state.estimates,
-        state.startingBalance
+        state.startingBalance,
+        state.activeScenario,
+        state.rollingConfig
       );
     } catch (err) {
-      console.error('Error calculating weekly cashflows:', err);
+      console.error('Error calculating rolling cashflows:', err);
       return [];
     }
-  }, [state.transactions, state.estimates, state.startingBalance]);
+  }, [state.transactions, state.estimates, state.startingBalance, state.activeScenario, state.rollingConfig]);
 
   // Computed values (same as before)
   const computedValues = useMemo(() => {

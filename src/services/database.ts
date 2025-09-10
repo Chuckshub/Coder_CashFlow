@@ -1,28 +1,24 @@
 import {
   collection,
   doc,
-  getDocs,
-  getDoc,
+  setDoc,
   addDoc,
+  getDoc,
+  getDocs,
   updateDoc,
   deleteDoc,
   query,
   where,
   orderBy,
-  limit,
-  onSnapshot,
   writeBatch,
-  serverTimestamp,
+  onSnapshot,
   Unsubscribe
 } from 'firebase/firestore';
 import {
   db,
+  auth,
   isFirebaseAvailable,
-  COLLECTIONS,
-  FirebaseTransaction,
-  FirebaseEstimate,
-  FirebaseCashflowSession,
-  FirebaseUserSettings
+  COLLECTIONS
 } from './firebase';
 import { Transaction, Estimate } from '../types';
 
@@ -77,6 +73,16 @@ interface FirebaseEstimate {
   updatedAt: string;
 }
 
+interface FirebaseUserSettings {
+  id: string;
+  userId: string;
+  theme: string;
+  currency: string;
+  dateFormat: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Types for database operations
 export interface DatabaseError {
   code: string;
@@ -119,6 +125,25 @@ const withFirebase = async <T>(
     };
   }
 };
+
+// Convert between Firebase and app interfaces
+const sessionFromFirebase = (firebaseSession: FirebaseCashflowSession): any => ({
+  id: firebaseSession.id,
+  name: firebaseSession.name,
+  description: firebaseSession.description,
+  timeRange: {
+    startDate: new Date(firebaseSession.startDate),
+    endDate: new Date(firebaseSession.endDate)
+  },
+  scenarios: firebaseSession.scenarios,
+  activeScenario: firebaseSession.activeScenario,
+  startingBalance: firebaseSession.startingBalance,
+  transactionCount: firebaseSession.transactionCount,
+  estimateCount: firebaseSession.estimateCount,
+  isActive: firebaseSession.isActive,
+  createdAt: new Date(firebaseSession.createdAt),
+  updatedAt: new Date(firebaseSession.updatedAt)
+});
 
 // Convert between local types and Firebase types
 const transactionToFirebase = (
@@ -218,14 +243,7 @@ export const createCashflowSession = async (
   },
   scenarios: string[] = ['base']
 ): Promise<DatabaseResult<string>> => {
-  if (!db) {
-    return {
-      success: false,
-      error: { code: 'firebase-not-initialized', message: 'Firebase not initialized' }
-    };
-  }
-
-  try {
+  return withFirebase(async () => {
     const sessionRef = doc(collection(db, 'cashflow_sessions'));
     const now = new Date();
     
@@ -254,27 +272,25 @@ export const createCashflowSession = async (
     };
 
     await setDoc(sessionRef, sessionData);
-    return { success: true, data: sessionRef.id };
-  } catch (error: any) {
-    return handleDatabaseError(error);
-  }
+    return sessionRef.id;
+  });
 };
 
-export const getCashflowSessions = async (
-  userId: string
-): Promise<DatabaseResult<FirebaseCashflowSession[]>> => {
+export const getCashflowSessions = async (userId: string): Promise<DatabaseResult<any[]>> => {
   return withFirebase(async () => {
     const q = query(
-      collection(db, COLLECTIONS.CASHFLOW_SESSIONS),
+      collection(db, 'cashflow_sessions'),
       where('userId', '==', userId),
       orderBy('updatedAt', 'desc')
     );
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as FirebaseCashflowSession[];
+    const sessions = querySnapshot.docs.map(doc => {
+      const data = doc.data() as Omit<FirebaseCashflowSession, 'id'>;
+      return sessionFromFirebase({ ...data, id: doc.id });
+    });
+    
+    return sessions;
   });
 };
 
@@ -313,11 +329,7 @@ export const saveTransactions = async (
     
     // Update session transaction count
     await updateCashflowSession(sessionId, {
-      transactionCount: transactions.length,
-      dateRange: transactions.length > 0 ? {
-        start: Math.min(...transactions.map(t => t.date.getTime())).toString(),
-        end: Math.max(...transactions.map(t => t.date.getTime())).toString()
-      } : null
+      transactionCount: transactions.length
     });
   });
 };
@@ -369,7 +381,8 @@ export const updateEstimate = async (
     if (updates.category !== undefined) updateData.category = updates.category;
     if (updates.description !== undefined) updateData.description = updates.description;
     if (updates.notes !== undefined) updateData.notes = updates.notes;
-    if (updates.weekNumber !== undefined) updateData.weekNumber = updates.weekNumber;
+    if (updates.weekDate !== undefined) updateData.weekDate = updates.weekDate.toISOString();
+    if (updates.scenario !== undefined) updateData.scenario = updates.scenario;
     if (updates.isRecurring !== undefined) updateData.isRecurring = updates.isRecurring;
     if (updates.recurringType !== undefined) updateData.recurringType = updates.recurringType;
     
