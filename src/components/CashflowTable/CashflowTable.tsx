@@ -62,7 +62,6 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
 
     const sourceWeek = parseInt(result.source.droppableId.split('-')[1]);
     const destWeek = parseInt(result.destination.droppableId.split('-')[1]);
-    const estimateType = result.source.droppableId.split('-')[2] as 'inflow' | 'outflow';
     
     // Find the estimate being moved
     const sourceWeekData = weeklyCashflows.find(w => w.weekNumber === sourceWeek);
@@ -187,9 +186,6 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
             
             <tbody className="bg-white divide-y divide-gray-200">
               {weeklyCashflows.map((weekData) => {
-                const totalInflow = weekData.actualInflow + weekData.estimatedInflow;
-                const totalOutflow = weekData.actualOutflow + weekData.estimatedOutflow;
-                
                 return (
                   <tr key={weekData.weekNumber} className="hover:bg-gray-50">
                     <td className="px-4 py-3 border-r border-gray-200">

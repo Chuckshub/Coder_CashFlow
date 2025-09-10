@@ -2,7 +2,6 @@ import { Transaction, InflowCategory, OutflowCategory } from '../types';
 
 export const categorizeTransaction = (transaction: Transaction): Transaction => {
   const desc = transaction.description.toUpperCase();
-  const amount = transaction.amount;
   
   let category: string;
   let subcategory: string | undefined;

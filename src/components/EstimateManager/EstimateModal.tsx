@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Estimate } from '../../types';
-import { formatCurrency } from '../../utils/dateUtils';
 
 interface EstimateModalProps {
   isOpen: boolean;

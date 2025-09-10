@@ -7,8 +7,7 @@ import {
   AppState 
 } from '../types';
 import { 
-  convertToTransaction, 
-  parseDate 
+  convertToTransaction
 } from '../utils/csvParser';
 import { 
   categorizeTransactions 

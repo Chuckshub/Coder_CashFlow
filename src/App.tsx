@@ -11,7 +11,6 @@ function App() {
   const [currentView, setCurrentView] = useState<AppView>('home');
   const {
     transactions,
-    estimates,
     weeklyCashflows,
     isLoading,
     error,
