@@ -1,13 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, Component, ErrorInfo } from 'react';
 import { RawTransaction } from './types';
 import { useCashflowData } from './hooks/useCashflowData';
 import CSVUpload from './components/DataImport/CSVUpload';
 import CashflowTable from './components/CashflowTable/CashflowTable';
 import { formatCurrency } from './utils/dateUtils';
 
+// Error Boundary Component
+class ErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('App Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
+          <div className="max-w-md mx-auto text-center">
+            <h1 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h1>
+            <p className="text-red-500 mb-4">The application encountered an error.</p>
+            <p className="text-sm text-gray-600">{this.state.error?.message}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 type AppView = 'home' | 'import' | 'dashboard';
 
 function App() {
+  console.log('App component rendering...');
+  
   const [currentView, setCurrentView] = useState<AppView>('home');
   const {
     transactions,
@@ -149,7 +192,7 @@ function App() {
                 <div className="-mt-6">
                   <div className="inline-flex items-center justify-center p-3 bg-green-500 rounded-md shadow-lg">
                     <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                   </div>
                   <h3 className="mt-8 text-lg font-medium text-gray-900 tracking-tight">
@@ -304,13 +347,15 @@ function App() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {renderNavigation()}
-      
-      {currentView === 'home' && renderHome()}
-      {currentView === 'import' && renderImport()}
-      {currentView === 'dashboard' && renderDashboard()}
-    </div>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50">
+        {renderNavigation()}
+        
+        {currentView === 'home' && renderHome()}
+        {currentView === 'import' && renderImport()}
+        {currentView === 'dashboard' && renderDashboard()}
+      </div>
+    </ErrorBoundary>
   );
 }
 
