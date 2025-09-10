@@ -7,34 +7,51 @@ export const parseCSVFile = (file: File): Promise<RawTransaction[]> => {
     Papa.parse(file, {
       header: true,
       dynamicTyping: true,
-      skipEmptyLines: true,
+      skipEmptyLines: 'greedy',
       transformHeader: (header: string) => header.trim(),
       transform: (value: string, header: string) => {
         // Clean up the value
-        const cleanValue = value.trim();
+        const cleanValue = value ? value.trim() : '';
         
         // Handle amount field - remove commas and convert to number
         if (header === 'Amount') {
+          if (!cleanValue) return 0;
           const numericValue = parseFloat(cleanValue.replace(/,/g, ''));
           return isNaN(numericValue) ? 0 : numericValue;
         }
         
         // Handle balance field
         if (header === 'Balance') {
+          if (!cleanValue) return 0;
           const numericValue = parseFloat(cleanValue.replace(/,/g, ''));
           return isNaN(numericValue) ? 0 : numericValue;
         }
         
         return cleanValue;
       },
+      // Allow flexible field counts
+      delimiter: ',',
+      quoteChar: '"',
+      escapeChar: '"',
       complete: (results) => {
         if (results.errors.length > 0) {
-          reject(new Error(`CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}`));
-          return;
+          // Filter out "too many fields" errors as they're expected with trailing commas
+          const criticalErrors = results.errors.filter(error => 
+            !error.message.includes('Too many fields')
+          );
+          
+          if (criticalErrors.length > 0) {
+            reject(new Error(`CSV parsing errors: ${criticalErrors.map(e => e.message).join(', ')}`));
+            return;
+          }
         }
         
         const validTransactions = results.data.filter((row: any) => {
-          return row && row.Details && row['Posting Date'] && row.Description !== undefined;
+          return row && 
+                 row.Details && 
+                 row['Posting Date'] && 
+                 row.Description !== undefined &&
+                 row.Description !== '';
         }) as RawTransaction[];
         
         resolve(validTransactions);
