@@ -1,51 +1,43 @@
 import React, { useState } from 'react';
-import { RawTransaction } from './types';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/Auth/ProtectedRoute';
+import UserHeader from './components/common/UserHeader';
 import CSVUpload from './components/DataImport/CSVUpload';
 import CashflowTable from './components/CashflowTable/CashflowTable';
-import SessionManager from './components/SessionManager/SessionManager';
-import FirebaseDebug from './components/common/FirebaseDebug';
-import UserHeader from './components/common/UserHeader';
-import ProtectedRoute from './components/Auth/ProtectedRoute';
-import { AuthProvider } from './contexts/AuthContext';
+import { RawTransaction } from './types';
+import { useAuth } from './contexts/AuthContext';
 import { useCashflowDataWithFirebase } from './hooks/useCashflowDataWithFirebase';
 
 type ActiveView = 'upload' | 'cashflow';
 
-function App() {
+function WorkingApp() {
   const [activeView, setActiveView] = useState<ActiveView>('upload');
   const {
     transactions,
     estimates,
     weeklyCashflows,
-    sessions,
-    currentSession,
     isLoading,
     isSaving,
     error,
-    loadTransactions,
     addEstimate,
     updateEstimate,
     deleteEstimate,
-    createSession,
-    renameSession,
-    switchSession,
+    loadTransactionData,
     clearError,
-    startingBalance,
-    totalActualInflow,
-    totalActualOutflow,
-    totalEstimatedInflow,
-    totalEstimatedOutflow
+    totalTransactions,
+    totalEstimates,
+    startingBalance
   } = useCashflowDataWithFirebase();
 
   const handleCSVUpload = async (rawTransactions: RawTransaction[]) => {
-    await loadTransactions(rawTransactions);
+    await loadTransactionData(rawTransactions);
     if (rawTransactions.length > 0) {
       setActiveView('cashflow');
     }
   };
 
-  const handleError = (errorMessage: string) => {
-    console.error('App error:', errorMessage);
+  const handleCSVError = (error: string) => {
+    console.error('CSV Upload error:', error);
   };
 
   return (
@@ -82,6 +74,7 @@ function App() {
                           ? 'bg-blue-100 text-blue-700'
                           : 'text-gray-600 hover:text-gray-900'
                       }`}
+                      disabled={transactions.length === 0}
                     >
                       Cashflow Table
                     </button>
@@ -94,53 +87,75 @@ function App() {
           </div>
 
           {/* Main Content */}
-          <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto py-8">
+            {/* Error Display */}
             {error && (
-              <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center">
-                    <svg className="h-5 w-5 text-red-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                    {error}
+              <div className="mb-6 mx-4 sm:mx-0">
+                <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-red-800">Error</h3>
+                      <p className="text-sm text-red-700 mt-1">{error}</p>
+                      <button
+                        onClick={clearError}
+                        className="text-sm text-red-600 hover:text-red-500 mt-2 underline"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={clearError}
-                    className="text-red-400 hover:text-red-600"
-                  >
-                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </button>
                 </div>
               </div>
             )}
 
-            {/* Session Manager */}
-            {sessions.length > 0 && (
-              <div className="mb-6">
-                <SessionManager
-                  sessions={sessions}
-                  currentSession={currentSession}
-                  onCreateSession={createSession}
-                  onRenameSession={renameSession}
-                  onSwitchSession={switchSession}
-                  isLoading={isLoading}
-                  isSaving={isSaving}
-                />
+            {/* Data Summary */}
+            {transactions.length > 0 && (
+              <div className="mb-6 mx-4 sm:mx-0">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900">Your Data</h3>
+                      <p className="text-sm text-gray-600">
+                        Transactions: {totalTransactions} • 
+                        Estimates: {totalEstimates} • 
+                        Balance: ${startingBalance.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {isLoading && (
+                        <div className="flex items-center text-blue-600">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                          <span className="text-sm">Loading...</span>
+                        </div>
+                      )}
+                      {isSaving && (
+                        <div className="flex items-center text-green-600">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
+                          <span className="text-sm">Saving...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Content based on active view */}
+            {/* Upload View */}
             {activeView === 'upload' && (
               <div className="px-4 sm:px-0">
                 <CSVUpload
                   onDataParsed={handleCSVUpload}
-                  onError={handleError}
+                  onError={handleCSVError}
                 />
               </div>
             )}
 
+            {/* Cashflow Table View */}
             {activeView === 'cashflow' && weeklyCashflows.length > 0 && (
               <div className="px-4 sm:px-0">
                 <CashflowTable
@@ -153,12 +168,12 @@ function App() {
               </div>
             )}
 
-            {/* Show message if no data */}
-            {activeView === 'cashflow' && weeklyCashflows.length === 0 && (
+            {/* No Data Message */}
+            {activeView === 'cashflow' && transactions.length === 0 && (
               <div className="px-4 sm:px-0">
                 <div className="text-center py-12">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
                   <h3 className="mt-2 text-sm font-medium text-gray-900">No cashflow data</h3>
                   <p className="mt-1 text-sm text-gray-500">
@@ -175,28 +190,11 @@ function App() {
                 </div>
               </div>
             )}
-
-            {/* Loading overlay */}
-            {(isLoading || isSaving) && (
-              <div className="fixed inset-0 bg-black bg-opacity-25 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 shadow-xl">
-                  <div className="flex items-center space-x-4">
-                    <svg className="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="text-gray-900 font-medium">
-                      {isSaving ? 'Saving data...' : 'Loading...'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </main>
+          </div>
         </ProtectedRoute>
       </div>
     </AuthProvider>
   );
 }
 
-export default App;
+export default WorkingApp;
