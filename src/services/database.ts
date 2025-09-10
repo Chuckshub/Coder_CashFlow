@@ -74,20 +74,28 @@ const transactionToFirebase = (
   transaction: Transaction,
   userId: string,
   sessionId: string
-): Omit<FirebaseTransaction, 'id'> => ({
-  userId,
-  sessionId,
-  date: transaction.date.toISOString(),
-  description: transaction.description,
-  amount: transaction.amount,
-  type: transaction.type,
-  category: transaction.category,
-  subcategory: transaction.subcategory,
-  balance: transaction.balance,
-  rawData: transaction.originalData,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString()
-});
+): Omit<FirebaseTransaction, 'id'> => {
+  const baseData = {
+    userId,
+    sessionId,
+    date: transaction.date.toISOString(),
+    description: transaction.description,
+    amount: transaction.amount,
+    type: transaction.type,
+    category: transaction.category,
+    balance: transaction.balance,
+    rawData: transaction.originalData,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  
+  // Only add subcategory if it's not undefined (Firestore doesn't accept undefined values)
+  if (transaction.subcategory !== undefined) {
+    (baseData as any).subcategory = transaction.subcategory;
+  }
+  
+  return baseData;
+};
 
 const transactionFromFirebase = (firebaseTransaction: FirebaseTransaction): Transaction => ({
   id: firebaseTransaction.id,
@@ -105,20 +113,31 @@ const estimateToFirebase = (
   estimate: Estimate,
   userId: string,
   sessionId: string
-): Omit<FirebaseEstimate, 'id'> => ({
-  userId,
-  sessionId,
-  amount: estimate.amount,
-  type: estimate.type,
-  category: estimate.category,
-  description: estimate.description,
-  notes: estimate.notes,
-  weekNumber: estimate.weekNumber,
-  isRecurring: estimate.isRecurring,
-  recurringType: estimate.recurringType,
-  createdAt: estimate.createdAt.toISOString(),
-  updatedAt: estimate.updatedAt.toISOString()
-});
+): Omit<FirebaseEstimate, 'id'> => {
+  const baseData = {
+    userId,
+    sessionId,
+    amount: estimate.amount,
+    type: estimate.type,
+    category: estimate.category,
+    description: estimate.description,
+    weekNumber: estimate.weekNumber,
+    isRecurring: estimate.isRecurring,
+    createdAt: estimate.createdAt.toISOString(),
+    updatedAt: estimate.updatedAt.toISOString()
+  };
+  
+  // Only add optional fields if they're not undefined (Firestore doesn't accept undefined values)
+  if (estimate.notes !== undefined) {
+    (baseData as any).notes = estimate.notes;
+  }
+  
+  if (estimate.recurringType !== undefined) {
+    (baseData as any).recurringType = estimate.recurringType;
+  }
+  
+  return baseData;
+};
 
 const estimateFromFirebase = (firebaseEstimate: FirebaseEstimate): Estimate => ({
   id: firebaseEstimate.id,
