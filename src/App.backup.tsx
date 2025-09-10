@@ -319,6 +319,7 @@ function App() {
         ) : transactions.length > 0 ? (
           <CashflowTable
             weeklyCashflows={weeklyCashflows}
+            transactions={transactions}
             onAddEstimate={addEstimate}
             onUpdateEstimate={updateEstimate}
             onDeleteEstimate={deleteEstimate}
