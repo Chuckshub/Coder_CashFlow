@@ -97,49 +97,89 @@ function databaseToTransaction(dbTransaction: DatabaseTransaction): Transaction 
  */
 export const getUserTransactions = async (userId: string): Promise<Transaction[]> => {
   try {
+    console.log('📋 getUserTransactions called for userId:', userId);
+    
     const transactionsRef = collection(db, COLLECTIONS.USER_TRANSACTIONS(userId));
-    const q = query(transactionsRef, orderBy('date', 'desc'));
+    console.log('🗿 Collection path:', COLLECTIONS.USER_TRANSACTIONS(userId));
+    
+    // Try without orderBy first to see if that's causing issues
+    const q = query(transactionsRef);
+    console.log('🔍 Executing query...');
+    
     const querySnapshot = await getDocs(q);
+    console.log('📊 Query returned', querySnapshot.size, 'documents');
     
     const transactions: Transaction[] = [];
     querySnapshot.forEach((doc) => {
+      console.log('📄 Processing doc:', doc.id);
       const data = doc.data() as DatabaseTransaction;
+      console.log('📄 Doc data:', { id: data.id, description: data.description?.substring(0, 50) });
       transactions.push(databaseToTransaction(data));
     });
     
+    console.log('✅ Processed', transactions.length, 'transactions');
+    
+    // Sort by date in memory instead of using Firestore orderBy
+    transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+    
     return transactions;
   } catch (error) {
-    console.error('Error getting user transactions:', error);
+    console.error('💥 Error getting user transactions:', error);
     throw new Error('Failed to load transactions');
   }
 };
 
 /**
- * Check if transactions with given hashes already exist
+ * Check which transactions already exist in the database
  */
-export const checkExistingTransactionHashes = async (
-  userId: string,
-  hashes: string[]
-): Promise<Set<string>> => {
-  if (hashes.length === 0) return new Set();
-  
+async function checkExistingTransactions(
+  hashes: string[],
+  userId: string
+): Promise<Set<string>> {
   try {
-    const transactionsRef = collection(db, COLLECTIONS.USER_TRANSACTIONS(userId));
-    const q = query(transactionsRef, where('hash', 'in', hashes));
-    const querySnapshot = await getDocs(q);
+    console.log('🔍 Checking', hashes.length, 'transaction hashes for duplicates');
+    
+    if (hashes.length === 0) return new Set();
     
     const existingHashes = new Set<string>();
-    querySnapshot.forEach((doc) => {
-      const data = doc.data() as DatabaseTransaction;
-      existingHashes.add(data.hash);
-    });
     
+    // Firestore IN operator supports max 30 values, so batch the queries
+    const batchSize = 30;
+    const batches: string[][] = [];
+    
+    for (let i = 0; i < hashes.length; i += batchSize) {
+      batches.push(hashes.slice(i, i + batchSize));
+    }
+    
+    console.log('📋 Splitting into', batches.length, 'batches of max 30 hashes each');
+    
+    // Process each batch
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      console.log(`🔍 Processing batch ${batchIndex + 1}/${batches.length} with ${batch.length} hashes`);
+      
+      const q = query(
+        collection(db, 'users', userId, 'transactions'),
+        where('hash', 'in', batch)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.hash) {
+          existingHashes.add(data.hash);
+        }
+      });
+    }
+    
+    console.log('✅ Found', existingHashes.size, 'existing transaction hashes');
     return existingHashes;
   } catch (error) {
     console.error('Error checking existing transaction hashes:', error);
-    return new Set(); // Return empty set on error to allow processing
+    // Return empty set on error to avoid blocking saves
+    return new Set();
   }
-};
+}
 
 /**
  * Save transactions to database with duplicate checking
@@ -171,7 +211,7 @@ export const saveTransactions = async (
     const newHashes = categorizedTransactions.map(t => t.hash!).filter(Boolean);
     
     // Check which hashes already exist in database
-    const existingHashes = await checkExistingTransactionHashes(userId, newHashes);
+    const existingHashes = await checkExistingTransactions(newHashes, userId);
     
     // Filter out duplicates
     const uniqueTransactions = categorizedTransactions.filter(transaction => {
