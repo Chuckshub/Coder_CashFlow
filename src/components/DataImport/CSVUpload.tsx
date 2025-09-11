@@ -78,12 +78,15 @@ const CSVUpload: React.FC<CSVUploadProps> = ({ onDataParsed, onError, onFileUplo
         throw new Error(`Invalid CSV structure: ${validation.errors.join(', ')}`);
       }
       
+      console.log('✅ Parsed', rawTransactions.length, 'transactions, setting fullData and preview');
+      
       setUploadState(prev => ({
         ...prev,
         isUploading: false,
         previewData: rawTransactions.slice(0, 10), // Show first 10 for preview
       }));
       
+      setFullData(rawTransactions); // 🔧 FIX: Store all transactions for Import Data
       setShowPreview(true);
       
     } catch (error) {
