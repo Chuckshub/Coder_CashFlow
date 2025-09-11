@@ -181,43 +181,79 @@ export class TransactionManager {
 
       // Step 3: Use Firebase Transaction for atomic upload
       console.log('💾 Starting atomic transaction upload...');
-      await runTransaction(db, async (transaction) => {
-        const collectionRef = collection(db, this.getCollectionPath());
+      
+      try {
+        await runTransaction(db, async (transaction) => {
+          const collectionRef = collection(db, this.getCollectionPath());
+          console.log('📁 Collection path:', this.getCollectionPath());
+          
+          // Prepare all documents
+          const docs = newTransactions.map(trans => {
+            const docRef = doc(collectionRef, trans.id);
+            
+            // Validate document ID is Firebase-safe
+            if (!trans.id || trans.id.length === 0 || trans.id.includes('/')) {
+              throw new Error(`Invalid document ID: ${trans.id}`);
+            }
+            
+            const firebaseData: FirebaseTransaction = {
+              id: trans.id,
+              hash: trans.hash || '',
+              userId: this.userId,
+              sessionId: this.sessionId,
+              date: Timestamp.fromDate(trans.date),
+              description: trans.description,
+              amount: trans.amount,
+              type: trans.type,
+              category: trans.category,
+              balance: trans.balance,
+              originalData: trans.originalData,
+              createdAt: Timestamp.now(),
+              updatedAt: Timestamp.now()
+            };
+            
+            // Only add subcategory if it has a value (Firebase doesn't allow undefined)
+            if (trans.subcategory !== undefined && trans.subcategory !== null && trans.subcategory !== '') {
+              firebaseData.subcategory = trans.subcategory;
+            }
+            
+            return { ref: docRef, data: firebaseData };
+          });
+
+          console.log('✅ Prepared', docs.length, 'documents for atomic write');
+          console.log('📄 Sample doc ID:', docs[0]?.ref.id);
+          console.log('📄 Sample doc path:', docs[0]?.ref.path);
+
+          // Write all documents atomically
+          docs.forEach(({ ref, data }, index) => {
+            try {
+              transaction.set(ref, data);
+              if (index < 3) {
+                console.log(`📝 Writing doc ${index + 1}:`, ref.id);
+              }
+            } catch (error) {
+              console.error(`❌ Error writing doc ${index + 1}:`, ref.id, error);
+              throw error;
+            }
+          });
+
+          console.log('💾 All documents added to atomic transaction');
+        });
         
-        // Prepare all documents
-        const docs = newTransactions.map(trans => {
-          const docRef = doc(collectionRef, trans.id);
-          const firebaseData: FirebaseTransaction = {
-            id: trans.id,
-            hash: trans.hash || '',
-            userId: this.userId,
-            sessionId: this.sessionId,
-            date: Timestamp.fromDate(trans.date),
-            description: trans.description,
-            amount: trans.amount,
-            type: trans.type,
-            category: trans.category,
-            balance: trans.balance,
-            originalData: trans.originalData,
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now()
-          };
-          
-          // Only add subcategory if it has a value (Firebase doesn't allow undefined)
-          if (trans.subcategory !== undefined && trans.subcategory !== null && trans.subcategory !== '') {
-            firebaseData.subcategory = trans.subcategory;
-          }
-          
-          return { ref: docRef, data: firebaseData };
+        console.log('✅ Atomic transaction completed successfully');
+        
+      } catch (error) {
+        const errorMessage = `Atomic transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        console.error('💥 Atomic transaction error:', error);
+        console.error('💥 Error details:', {
+          name: (error as Error)?.name,
+          message: (error as Error)?.message,
+          code: (error as any)?.code,
+          stack: (error as Error)?.stack?.substring(0, 500)
         });
-
-        // Write all documents atomically
-        docs.forEach(({ ref, data }) => {
-          transaction.set(ref, data);
-        });
-
-        console.log('✅ Prepared', docs.length, 'documents for atomic write');
-      });
+        result.errors.push(errorMessage);
+        return result;
+      }
 
       result.uploaded = newTransactions.length;
       result.uploadedIds = newTransactions.map(t => t.id);
@@ -225,6 +261,31 @@ export class TransactionManager {
 
       // Step 4: Update session metadata
       await this.updateSessionMetadata();
+      
+      // Step 5: Immediate verification
+      console.log('🔍 Immediate verification - checking if documents exist...');
+      try {
+        const verificationQuery = await getDocs(collection(db, this.getCollectionPath()));
+        console.log('🔍 VERIFICATION: Found', verificationQuery.size, 'documents after upload');
+        
+        if (verificationQuery.size < newTransactions.length) {
+          console.warn('⚠️ VERIFICATION WARNING: Expected', newTransactions.length, 'documents, found', verificationQuery.size);
+          console.warn('⚠️ This suggests some documents may not have been written');
+        } else {
+          console.log('✅ VERIFICATION PASSED: All documents appear to be written');
+        }
+        
+        // Sample a few document IDs
+        const foundIds: string[] = [];
+        verificationQuery.forEach(doc => {
+          foundIds.push(doc.id);
+        });
+        
+        console.log('📄 First 3 document IDs found:', foundIds.slice(0, 3));
+        
+      } catch (verificationError) {
+        console.error('❌ Verification failed:', verificationError);
+      }
 
       console.log('🎉 Upload completed successfully:', result);
       return result;

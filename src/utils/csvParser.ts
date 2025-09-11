@@ -143,8 +143,17 @@ export const convertToTransaction = (rawTransaction: RawTransaction): Transactio
   const amount = Math.abs(rawTransaction.Amount);
   const isInflow = rawTransaction.Details === 'CREDIT' || rawTransaction.Amount > 0;
   
+  // Create a Firebase-safe ID by removing invalid characters
+  const safeDate = rawTransaction['Posting Date'].replace(/[/:\s]/g, '-');
+  const safeDescription = rawTransaction.Description
+    .substring(0, 20)
+    .replace(/[^a-zA-Z0-9\-_]/g, '-') // Only allow alphanumeric, hyphens, and underscores
+    .replace(/-+/g, '-') // Replace multiple consecutive hyphens with single hyphen
+    .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+  const randomId = Math.random().toString(36).substring(2, 9);
+  
   return {
-    id: `${rawTransaction['Posting Date']}-${rawTransaction.Description.substring(0, 20)}-${Math.random().toString(36).substring(2, 9)}`,
+    id: `${safeDate}-${safeDescription}-${randomId}`,
     hash: createTransactionHashFromRaw(rawTransaction),
     date: parseDate(rawTransaction['Posting Date']),
     description: rawTransaction.Description,
