@@ -170,6 +170,8 @@ function DatabaseApp() {
   }, [transactions, estimates]);
 
   const handleCSVDataParsed = useCallback(async (rawTransactions: RawTransaction[]) => {
+    console.log('🔄 handleCSVDataParsed called with', rawTransactions.length, 'raw transactions');
+    
     if (!currentUser?.uid) {
       console.error('❌ User not authenticated');
       setError('User not authenticated');

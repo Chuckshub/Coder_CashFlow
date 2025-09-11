@@ -125,7 +125,12 @@ const CSVUpload: React.FC<CSVUploadProps> = ({ onDataParsed, onError, onFileUplo
   }, [handleFile]);
   
   const handleConfirmData = () => {
+    console.log('💆 Import Data button clicked!');
+    console.log('📊 fullData.length:', fullData.length);
+    console.log('🔗 onDataParsed exists:', !!onDataParsed);
+    
     if (fullData.length > 0 && onDataParsed) {
+      console.log('✅ Calling onDataParsed with', fullData.length, 'transactions');
       setUploadState(prev => ({ ...prev, isProcessing: true }));
       
       try {
@@ -146,9 +151,15 @@ const CSVUpload: React.FC<CSVUploadProps> = ({ onDataParsed, onError, onFileUplo
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Processing failed';
+        console.error('💥 Error in handleConfirmData:', error);
         onError(errorMessage);
         setUploadState(prev => ({ ...prev, isProcessing: false, error: errorMessage }));
       }
+    } else {
+      console.warn('⚠️ Import Data conditions not met:', {
+        fullDataLength: fullData.length,
+        onDataParsedExists: !!onDataParsed
+      });
     }
   };
   
