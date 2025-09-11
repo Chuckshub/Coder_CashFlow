@@ -201,6 +201,11 @@ function DatabaseApp() {
       
       // Reload transactions from database
       console.log('🔄 Reloading transactions from database...');
+      
+      // Add small delay for Firestore eventual consistency
+      console.log('⏱️ Waiting briefly for Firestore consistency...');
+      await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
+      
       await loadTransactionsFromDatabase();
       console.log('✅ Reload completed');
       

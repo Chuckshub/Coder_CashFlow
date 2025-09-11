@@ -231,13 +231,20 @@ export const saveTransactions = async (
     const batch = writeBatch(db);
     const transactionsRef = collection(db, COLLECTIONS.USER_TRANSACTIONS(userId));
     
+    console.log('💾 Starting batch write to collection:', COLLECTIONS.USER_TRANSACTIONS(userId));
+    console.log('💾 Writing', uniqueTransactions.length, 'transactions to batch');
+    
     uniqueTransactions.forEach((transaction) => {
       const docRef = doc(transactionsRef, transaction.id);
       const dbTransaction = transactionToDatabase(transaction, userId);
+      console.log('📄 Adding to batch - Doc ID:', transaction.id, 'Description:', transaction.description.substring(0, 50));
       batch.set(docRef, dbTransaction);
     });
     
+    console.log('💾 Committing batch with', uniqueTransactions.length, 'documents...');
     await batch.commit();
+    console.log('✅ Batch commit completed successfully');
+    
     results.saved = uniqueTransactions.length;
     
     console.log(`✅ Successfully saved ${results.saved} transactions`);
