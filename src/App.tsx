@@ -9,7 +9,8 @@ import { formatCurrency, generate13Weeks } from './utils/dateUtils';
 import { v4 as uuidv4 } from 'uuid';
 import {
   saveTransactions,
-  getUserTransactions
+  getUserTransactions,
+  debugCountUserTransactions
 } from './services/transactionDatabase';
 
 type ActiveView = 'upload' | 'cashflow';
@@ -198,6 +199,11 @@ function DatabaseApp() {
       } else {
         console.log('✅ Upload completed successfully');
       }
+      
+      // Debug: Verify documents were actually saved
+      console.log('🔍 Verifying documents were saved...');
+      const docCount = await debugCountUserTransactions(currentUser.uid);
+      console.log('📋 DEBUG: Found', docCount, 'documents in database after save');
       
       // Reload transactions from database
       console.log('🔄 Reloading transactions from database...');
@@ -411,46 +417,59 @@ function DatabaseApp() {
         )}
 
         {/* Cashflow Table View */}
-        {activeView === 'cashflow' && (() => {
-          console.log('📋 Cashflow table render check:', {
-            activeView,
-            weeklyCashflowsLength: weeklyCashflows.length,
-            transactionsLength: transactions.length,
-            shouldRender: weeklyCashflows.length > 0
-          });
-          return weeklyCashflows.length > 0;
-        })() && (
+        {activeView === 'cashflow' && (
           <div className="px-4 sm:px-0">
-            <CashflowTable
-              weeklyCashflows={weeklyCashflows}
-              transactions={transactions}
-              onAddEstimate={addEstimate}
-              onUpdateEstimate={updateEstimate}
-              onDeleteEstimate={deleteEstimate}
-            />
-          </div>
-        )}
-
-        {/* No Data Message */}
-        {activeView === 'cashflow' && transactions.length === 0 && !isLoadingTransactions && (
-          <div className="px-4 sm:px-0">
-            <div className="text-center py-12">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No transaction data in database</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Upload your transaction data to get started with cashflow projections.
-              </p>
-              <div className="mt-6">
-                <button
-                  onClick={() => setActiveView('upload')}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Upload Transaction Data
-                </button>
+            {(() => {
+              console.log('📋 Cashflow table render check:', {
+                activeView,
+                weeklyCashflowsLength: weeklyCashflows.length,
+                transactionsLength: transactions.length,
+                shouldRender: true // Always render, handle empty state inside
+              });
+              return true;
+            })()}
+            
+            {weeklyCashflows.length > 0 ? (
+              <CashflowTable
+                weeklyCashflows={weeklyCashflows}
+                transactions={transactions}
+                onAddEstimate={addEstimate}
+                onUpdateEstimate={updateEstimate}
+                onDeleteEstimate={deleteEstimate}
+              />
+            ) : (
+              <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                <div className="mb-6">
+                  <svg className="mx-auto h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  No Cashflow Data Available
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  {transactions.length === 0 
+                    ? "Upload transaction data to generate your 13-week cashflow projection."
+                    : "Generating cashflow projections from your transaction data..."}
+                </p>
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-500">
+                    Transactions in database: {transactions.length}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Weekly cashflow entries: {weeklyCashflows.length}
+                  </p>
+                  {transactions.length > 0 && (
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      🔄 Refresh Page
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>

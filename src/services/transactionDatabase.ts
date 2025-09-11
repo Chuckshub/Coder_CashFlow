@@ -312,3 +312,31 @@ export const clearUserTransactions = async (userId: string): Promise<void> => {
     throw error;
   }
 };
+
+/**
+ * Debug function to count documents in user's transaction collection
+ */
+export const debugCountUserTransactions = async (userId: string): Promise<number> => {
+  try {
+    console.log('🔍 DEBUG: Counting documents in collection:', COLLECTIONS.USER_TRANSACTIONS(userId));
+    
+    const transactionsRef = collection(db, COLLECTIONS.USER_TRANSACTIONS(userId));
+    const snapshot = await getDocs(transactionsRef);
+    
+    console.log('🔍 DEBUG: Found', snapshot.size, 'documents in collection');
+    
+    // List first few document IDs
+    const docIds: string[] = [];
+    snapshot.forEach(doc => {
+      docIds.push(doc.id);
+      if (docIds.length <= 5) {
+        console.log('📄 DEBUG: Document ID:', doc.id, 'Data keys:', Object.keys(doc.data()));
+      }
+    });
+    
+    return snapshot.size;
+  } catch (error) {
+    console.error('💥 DEBUG: Error counting documents:', error);
+    return 0;
+  }
+};
