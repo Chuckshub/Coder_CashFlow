@@ -54,10 +54,10 @@ export interface FirebaseEstimate {
   type: 'inflow' | 'outflow';
   category: string;
   description: string;
-  notes?: string;
+  notes?: string; // Optional - only present if has value
   weekNumber: number;
   isRecurring: boolean;
-  recurringType?: 'weekly' | 'bi-weekly' | 'monthly';
+  recurringType?: 'weekly' | 'bi-weekly' | 'monthly'; // Optional - only present if has value
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy: string; // User email or display name
@@ -368,6 +368,7 @@ export class SimpleFirebaseService {
       const collectionRef = collection(db, this.getEstimatesCollectionPath());
       const docRef = doc(collectionRef, estimate.id);
       
+      // Create the Firebase estimate object, filtering out undefined values
       const firebaseEstimate: FirebaseEstimate = {
         id: estimate.id,
         userId: this.userId,
@@ -375,15 +376,29 @@ export class SimpleFirebaseService {
         type: estimate.type,
         category: estimate.category,
         description: estimate.description,
-        notes: estimate.notes,
         weekNumber: estimate.weekNumber,
         isRecurring: estimate.isRecurring,
-        recurringType: estimate.recurringType,
         createdAt: estimate.createdAt ? Timestamp.fromDate(estimate.createdAt) : Timestamp.now(),
         updatedAt: Timestamp.now(),
         createdBy: userDisplayName || userEmail || 'Unknown User',
         createdByUserId: this.userId
       };
+      
+      // Only add optional fields if they have values (not undefined)
+      if (estimate.notes !== undefined && estimate.notes !== null && estimate.notes !== '') {
+        firebaseEstimate.notes = estimate.notes;
+      }
+      
+      if (estimate.recurringType !== undefined && estimate.recurringType !== null) {
+        firebaseEstimate.recurringType = estimate.recurringType;
+      }
+      
+      console.log('💾 Final estimate data for Firebase:', {
+        id: firebaseEstimate.id,
+        hasNotes: !!firebaseEstimate.notes,
+        hasRecurringType: !!firebaseEstimate.recurringType,
+        description: firebaseEstimate.description
+      });
       
       await setDoc(docRef, firebaseEstimate);
       console.log('✅ Estimate saved successfully:', estimate.id);
@@ -424,7 +439,9 @@ export class SimpleFirebaseService {
           description: data.description,
           amount: data.amount,
           weekNumber: data.weekNumber,
-          createdBy: data.createdBy
+          createdBy: data.createdBy,
+          hasNotes: !!data.notes,
+          hasRecurringType: !!data.recurringType
         });
         
         try {
@@ -434,10 +451,10 @@ export class SimpleFirebaseService {
             type: data.type,
             category: data.category,
             description: data.description,
-            notes: data.notes,
+            notes: data.notes, // Can be undefined - that's OK for the Estimate type
             weekNumber: data.weekNumber,
             isRecurring: data.isRecurring,
-            recurringType: data.recurringType,
+            recurringType: data.recurringType, // Can be undefined - that's OK for the Estimate type
             createdAt: data.createdAt.toDate(),
             updatedAt: data.updatedAt.toDate()
           };
@@ -510,10 +527,10 @@ export class SimpleFirebaseService {
             type: data.type,
             category: data.category,
             description: data.description,
-            notes: data.notes,
+            notes: data.notes, // Can be undefined
             weekNumber: data.weekNumber,
             isRecurring: data.isRecurring,
-            recurringType: data.recurringType,
+            recurringType: data.recurringType, // Can be undefined
             createdAt: data.createdAt.toDate(),
             updatedAt: data.updatedAt.toDate(),
             createdBy: data.createdBy,
@@ -555,10 +572,10 @@ export class SimpleFirebaseService {
             type: data.type,
             category: data.category,
             description: data.description,
-            notes: data.notes,
+            notes: data.notes, // Can be undefined
             weekNumber: data.weekNumber,
             isRecurring: data.isRecurring,
-            recurringType: data.recurringType,
+            recurringType: data.recurringType, // Can be undefined
             createdAt: data.createdAt.toDate(),
             updatedAt: data.updatedAt.toDate()
           };
