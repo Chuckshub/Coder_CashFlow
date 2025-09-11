@@ -9,11 +9,11 @@ import { Transaction, Estimate, WeeklyCashflow, RawTransaction } from './types';
 import { formatCurrency, generate13Weeks } from './utils/dateUtils';
 import { v4 as uuidv4 } from 'uuid';
 import { 
-  processCSVFile, 
+  processRawTransactionsSimple, 
   PipelineProgress, 
   PipelineResult 
-} from './services/csvToFirebasePipeline';
-import { getDataLoader, DataLoadingState } from './services/dataLoader';
+} from './services/csvToFirebasePipelineSimple';
+import { getSimpleDataLoader, DataLoadingState } from './services/dataLoaderSimple';
 import { testFirebaseConnection } from './utils/firebaseTest';
 
 type ActiveView = 'upload' | 'cashflow';
@@ -136,7 +136,7 @@ function DatabaseApp() {
     setIsLoadingTransactions(true);
     
     try {
-      const dataLoader = getDataLoader(currentUser.uid);
+      const dataLoader = getSimpleDataLoader(currentUser.uid);
       
       const { data, state } = await dataLoader.loadTransactions(false, true);
       
@@ -163,7 +163,7 @@ function DatabaseApp() {
     
     console.log('👂 Setting up real-time transaction subscription...');
     
-    const dataLoader = getDataLoader(currentUser.uid);
+    const dataLoader = getSimpleDataLoader(currentUser.uid);
     
     const unsubscribe = dataLoader.subscribeToTransactions((data, state) => {
       console.log('🔄 Real-time transaction update in App:', data.length, 'transactions');
@@ -196,9 +196,9 @@ function DatabaseApp() {
     return calculateWeeklyCashflows(transactions, estimates, 0);
   }, [transactions, estimates]);
 
-  // Handle CSV data parsing using new pipeline
+  // Handle CSV data parsing using simplified pipeline
   const handleCSVDataParsed = useCallback(async (rawTransactions: RawTransaction[]) => {
-    console.log('🚀 Processing CSV data with new pipeline...', rawTransactions.length, 'transactions');
+    console.log('🚀 Processing CSV data with SIMPLIFIED pipeline...', rawTransactions.length, 'transactions');
     
     if (!currentUser?.uid) {
       setError('User not authenticated');
@@ -211,10 +211,7 @@ function DatabaseApp() {
     setUploadResult(null);
     
     try {
-      // Convert File-like object from raw transactions for processing
-      const pipeline = await import('./services/csvToFirebasePipeline');
-      
-      const result = await pipeline.processRawTransactions(
+      const result = await processRawTransactionsSimple(
         rawTransactions,
         currentUser.uid
       );
@@ -225,15 +222,15 @@ function DatabaseApp() {
         console.warn('⚠️ Upload completed with errors:', result.errors);
         setError(`Upload completed with ${result.errors.length} errors. Check console for details.`);
       } else {
-        console.log('✅ Upload completed successfully');
+        console.log('✅ SIMPLIFIED upload completed successfully');
       }
       
-      // Data will be updated automatically via real-time subscription
+      // Data will update automatically via real-time subscription
       console.log('🔄 Waiting for real-time updates...');
       
     } catch (error: any) {
-      const errorMsg = `Upload failed: ${error.message}`;
-      console.error('💥 CSV processing error:', error);
+      const errorMsg = `SIMPLIFIED upload failed: ${error.message}`;
+      console.error('💥 SIMPLIFIED CSV processing error:', error);
       setError(errorMsg);
     } finally {
       setIsLoading(false);
@@ -284,7 +281,7 @@ function DatabaseApp() {
     if (!currentUser?.uid) return;
     
     console.log('🔄 Refreshing all data...');
-    const dataLoader = getDataLoader(currentUser.uid);
+    const dataLoader = getSimpleDataLoader(currentUser.uid);
     await dataLoader.refreshAll();
   }, [currentUser?.uid]);
 
@@ -297,7 +294,7 @@ function DatabaseApp() {
             <div className="flex items-center space-x-4">
               <h1 className="text-2xl font-bold text-gray-900">Coder Cashflow</h1>
               <span className="text-sm text-gray-500">
-                v2.0 - New Firebase Architecture
+                v3.0 - Simplified Firebase (No Sessions!)
               </span>
             </div>
             <div className="flex items-center space-x-4">
@@ -475,10 +472,10 @@ function DatabaseApp() {
             <FirebaseStatus showDetails={true} />
             
             <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <h3 className="text-sm font-medium text-green-800 mb-1">🆕 New Firebase Architecture</h3>
+              <h3 className="text-sm font-medium text-green-800 mb-1">🆕 Simplified Architecture</h3>
               <p className="text-sm text-green-700">
-                Completely rebuilt Firebase system with real-time sync, atomic transactions, 
-                better error handling, and comprehensive caching.
+                Much cleaner Firebase structure: users/&#123;userId&#125;/transactions/&#123;hash&#125;<br/>
+                No sessions, no complexity - just user isolation + hash-based deduplication!
               </p>
             </div>
             
