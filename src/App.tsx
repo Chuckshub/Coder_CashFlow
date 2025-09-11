@@ -4,7 +4,7 @@ import ProtectedRoute from './components/Auth/ProtectedRoute';
 import UserHeader from './components/common/UserHeader';
 import CSVUpload from './components/DataImport/CSVUpload';
 import CashflowTable from './components/CashflowTable/CashflowTable';
-import { Transaction, Estimate, WeeklyCashflow } from './types';
+import { Transaction, Estimate, WeeklyCashflow, RawTransaction } from './types';
 import { formatCurrency, generate13Weeks } from './utils/dateUtils';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -20,7 +20,15 @@ function calculateSimpleWeeklyCashflows(
   estimates: Estimate[],
   startingBalance: number
 ): WeeklyCashflow[] {
+  console.log('📋 Starting calculateSimpleWeeklyCashflows with:', {
+    transactions: transactions.length,
+    estimates: estimates.length, 
+    startingBalance
+  });
+  
   const weeks = generate13Weeks();
+  console.log('📅 Generated', weeks.length, 'weeks starting from', weeks[0]);
+  
   const weeklyCashflows: WeeklyCashflow[] = [];
   let runningBalance = startingBalance;
   
@@ -86,6 +94,7 @@ function calculateSimpleWeeklyCashflows(
     });
   });
   
+  console.log('✅ calculateSimpleWeeklyCashflows completed with', weeklyCashflows.length, 'entries');
   return weeklyCashflows;
 }
 
@@ -136,23 +145,31 @@ function DatabaseApp() {
 
   // Calculate weekly cashflows
   const weeklyCashflows: WeeklyCashflow[] = React.useMemo(() => {
-    if (transactions.length === 0) return [];
+    console.log('📊 Calculating weekly cashflows with', transactions.length, 'transactions and', estimates.length, 'estimates');
+    
+    if (transactions.length === 0) {
+      console.log('⚠️ No transactions available for cashflow calculation');
+      return [];
+    }
     
     try {
       const startingBalance = transactions.length > 0 
         ? Math.max(...transactions.map(t => t.balance))
         : 0;
       
-      return calculateSimpleWeeklyCashflows(transactions, estimates, startingBalance);
+      console.log('💰 Starting balance calculated as:', startingBalance);
+      
+      const cashflows = calculateSimpleWeeklyCashflows(transactions, estimates, startingBalance);
+      console.log('✅ Generated', cashflows.length, 'weekly cashflow entries');
+      
+      return cashflows;
     } catch (error) {
-      console.error('Error calculating weekly cashflows:', error);
+      console.error('💥 Error calculating weekly cashflows:', error);
       return [];
     }
   }, [transactions, estimates]);
 
-  const handleFileUpload = useCallback(async (file: File) => {
-    console.log('🔄 handleFileUpload called with file:', file.name, file.size, 'bytes');
-    
+  const handleCSVDataParsed = useCallback(async (rawTransactions: RawTransaction[]) => {
     if (!currentUser?.uid) {
       console.error('❌ User not authenticated');
       setError('User not authenticated');
@@ -160,20 +177,12 @@ function DatabaseApp() {
     }
     
     console.log('✅ User authenticated:', currentUser.uid);
+    console.log('📊 Processing', rawTransactions.length, 'parsed transactions');
     setIsLoading(true);
     setError(null);
     setUploadStats(null);
     
     try {
-      console.log('📊 Processing file:', file.name);
-      
-      // Parse CSV file
-      const { parseCSVFile } = await import('./utils/csvParser');
-      console.log('📦 CSV parser imported successfully');
-      
-      const rawTransactions = await parseCSVFile(file);
-      console.log('✅ Parsed', rawTransactions.length, 'raw transactions');
-      
       console.log('💾 Saving', rawTransactions.length, 'transactions to database...');
       
       // Save to database with duplicate checking
@@ -388,14 +397,22 @@ function DatabaseApp() {
               </p>
             </div>
             <CSVUpload
-              onFileUpload={handleFileUpload}
+              onDataParsed={handleCSVDataParsed}
               onError={handleCSVError}
             />
           </div>
         )}
 
         {/* Cashflow Table View */}
-        {activeView === 'cashflow' && weeklyCashflows.length > 0 && (
+        {activeView === 'cashflow' && (() => {
+          console.log('📋 Cashflow table render check:', {
+            activeView,
+            weeklyCashflowsLength: weeklyCashflows.length,
+            transactionsLength: transactions.length,
+            shouldRender: weeklyCashflows.length > 0
+          });
+          return weeklyCashflows.length > 0;
+        })() && (
           <div className="px-4 sm:px-0">
             <CashflowTable
               weeklyCashflows={weeklyCashflows}
