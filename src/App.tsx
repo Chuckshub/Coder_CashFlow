@@ -4,13 +4,12 @@ import ProtectedRoute from './components/Auth/ProtectedRoute';
 import UserHeader from './components/common/UserHeader';
 import CSVUpload from './components/DataImport/CSVUpload';
 import CashflowTable from './components/CashflowTable/CashflowTable';
-import { RawTransaction, Transaction, Estimate, WeeklyCashflow } from './types';
+import { Transaction, Estimate, WeeklyCashflow } from './types';
 import { formatCurrency, generate13Weeks } from './utils/dateUtils';
 import { v4 as uuidv4 } from 'uuid';
 import {
   saveTransactions,
-  getUserTransactions,
-  getTransactionSummary
+  getUserTransactions
 } from './services/transactionDatabase';
 
 type ActiveView = 'upload' | 'cashflow';
@@ -151,35 +150,55 @@ function DatabaseApp() {
     }
   }, [transactions, estimates]);
 
-  const handleCSVUpload = useCallback(async (rawTransactions: RawTransaction[]) => {
+  const handleFileUpload = useCallback(async (file: File) => {
+    console.log('🔄 handleFileUpload called with file:', file.name, file.size, 'bytes');
+    
     if (!currentUser?.uid) {
+      console.error('❌ User not authenticated');
       setError('User not authenticated');
       return;
     }
     
+    console.log('✅ User authenticated:', currentUser.uid);
     setIsLoading(true);
     setError(null);
     setUploadStats(null);
     
     try {
-      console.log('📊 Processing and saving', rawTransactions.length, 'transactions to database...');
+      console.log('📊 Processing file:', file.name);
+      
+      // Parse CSV file
+      const { parseCSVFile } = await import('./utils/csvParser');
+      console.log('📦 CSV parser imported successfully');
+      
+      const rawTransactions = await parseCSVFile(file);
+      console.log('✅ Parsed', rawTransactions.length, 'raw transactions');
+      
+      console.log('💾 Saving', rawTransactions.length, 'transactions to database...');
       
       // Save to database with duplicate checking
       const results = await saveTransactions(rawTransactions, currentUser.uid);
+      console.log('💾 Save results:', results);
       setUploadStats(results);
       
       if (results.errors.length > 0) {
+        console.warn('⚠️ Upload completed with errors:', results.errors);
         setError(`Upload completed with errors: ${results.errors.join(', ')}`);
+      } else {
+        console.log('✅ Upload completed successfully');
       }
       
-      // Reload transactions from database to get the updated data
+      // Reload transactions from database
+      console.log('🔄 Reloading transactions from database...');
       await loadTransactionsFromDatabase();
+      console.log('✅ Reload completed');
       
     } catch (error: any) {
       const errorMsg = `Upload failed: ${error.message}`;
-      console.error('💥', errorMsg);
+      console.error('💥 Upload error:', error);
       setError(errorMsg);
     } finally {
+      console.log('🏁 Upload process finished');
       setIsLoading(false);
     }
   }, [currentUser?.uid, loadTransactionsFromDatabase]);
@@ -369,7 +388,7 @@ function DatabaseApp() {
               </p>
             </div>
             <CSVUpload
-              onDataParsed={handleCSVUpload}
+              onFileUpload={handleFileUpload}
               onError={handleCSVError}
             />
           </div>

@@ -4,7 +4,7 @@ import { parseCSVFile, validateCSVStructure, getTransactionSummary } from '../..
 import { formatCurrency } from '../../utils/dateUtils';
 
 interface CSVUploadProps {
-  onDataParsed: (transactions: RawTransaction[]) => void;
+  onDataParsed?: (transactions: RawTransaction[]) => void;
   onError: (error: string) => void;
   onFileUpload?: (file: File) => Promise<void>; // New direct file upload handler
 }
@@ -125,7 +125,7 @@ const CSVUpload: React.FC<CSVUploadProps> = ({ onDataParsed, onError, onFileUplo
   }, [handleFile]);
   
   const handleConfirmData = () => {
-    if (fullData.length > 0) {
+    if (fullData.length > 0 && onDataParsed) {
       setUploadState(prev => ({ ...prev, isProcessing: true }));
       
       try {
@@ -140,7 +140,7 @@ const CSVUpload: React.FC<CSVUploadProps> = ({ onDataParsed, onError, onFileUplo
         });
         setFullData([]);
         
-        // Reset file input
+        // Clear file input
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
