@@ -11,6 +11,7 @@ interface CashflowTableProps {
   onUpdateEstimate: (id: string, estimate: Partial<Estimate>) => void;
   onDeleteEstimate: (id: string) => void;
   onEstimateClick?: (estimateId: string) => void; // Optional click handler to show creator info
+  onRefreshData?: () => void; // Optional refresh callback
 }
 
 interface ModalState {
@@ -26,7 +27,8 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
   onAddEstimate, 
   onUpdateEstimate, 
   onDeleteEstimate,
-  onEstimateClick
+  onEstimateClick,
+  onRefreshData
 }) => {
   const [modalState, setModalState] = useState<ModalState>({
     isOpen: false,
@@ -300,6 +302,7 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
           weeklyCashflows={weeklyCashflows}
           transactions={transactions}
           onClose={() => setShowDetailView(false)}
+          onRefreshData={onRefreshData}
         />
       )}
     </div>

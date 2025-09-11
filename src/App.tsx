@@ -387,6 +387,30 @@ function DatabaseApp() {
     }
   }, [currentUser?.uid, loadEstimatesFromDatabase]);
 
+  // Refresh all data (for debugging/manual reload)
+  const refreshAllData = useCallback(async () => {
+    console.log('🔄 Manual refresh all data triggered');
+    if (!currentUser?.uid) {
+      console.warn('No user authenticated for refresh');
+      return;
+    }
+
+    try {
+      // Reload transactions
+      console.log('🔄 Refreshing transactions...');
+      await loadTransactionsFromDatabase();
+      
+      // Reload estimates  
+      console.log('🔄 Refreshing estimates...');
+      await loadEstimatesFromDatabase();
+      
+      console.log('✅ All data refreshed successfully');
+    } catch (error: any) {
+      console.error('💥 Error refreshing data:', error);
+      setError(`Failed to refresh data: ${error.message}`);
+    }
+  }, [currentUser?.uid, loadTransactionsFromDatabase, loadEstimatesFromDatabase]);
+
   // Handle estimate click to show creator info
   const handleEstimateClick = useCallback((estimateId: string) => {
     console.log('🔍 Opening estimate creator modal for:', estimateId);
@@ -403,15 +427,6 @@ function DatabaseApp() {
     setError(null);
   }, []);
 
-  // Refresh all data
-  const refreshData = useCallback(async () => {
-    if (!currentUser?.uid) return;
-    
-    console.log('🔄 Refreshing all data...');
-    const dataLoader = getSimpleDataLoader(currentUser.uid);
-    await dataLoader.refreshAll();
-  }, [currentUser?.uid]);
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -426,7 +441,7 @@ function DatabaseApp() {
             </div>
             <div className="flex items-center space-x-4">
               <button
-                onClick={refreshData}
+                onClick={refreshAllData}
                 className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
               >
                 🔄 Refresh
@@ -637,6 +652,7 @@ function DatabaseApp() {
                 onUpdateEstimate={updateEstimate}
                 onDeleteEstimate={deleteEstimate}
                 onEstimateClick={handleEstimateClick}
+                onRefreshData={refreshAllData}
               />
             ) : (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">

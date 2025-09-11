@@ -6,6 +6,7 @@ interface WeeklyDetailViewProps {
   weeklyCashflows: WeeklyCashflow[];
   transactions: Transaction[];
   onClose: () => void;
+  onRefreshData?: () => void; // Optional refresh callback
 }
 
 interface CategoryData {
@@ -20,19 +21,84 @@ interface CategoryData {
 const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
   weeklyCashflows,
   transactions,
-  onClose
+  onClose,
+  onRefreshData
 }) => {
   const [selectedWeek, setSelectedWeek] = useState(0); // Start with Week 0 (current week)
   const [activeTab, setActiveTab] = useState<'inflow' | 'outflow'>('inflow');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showRefreshSuccess, setShowRefreshSuccess] = useState(false);
 
-  const selectedWeekData = weeklyCashflows.find(w => w.weekNumber === selectedWeek);
+  // Handle refresh with loading state
+  const handleRefresh = async () => {
+    if (!onRefreshData || isRefreshing) return;
+    
+    setIsRefreshing(true);
+    setShowRefreshSuccess(false);
+    try {
+      await onRefreshData();
+      console.log('✅ WeeklyDetailView - Data refresh completed');
+      setShowRefreshSuccess(true);
+      // Hide success message after 2 seconds
+      setTimeout(() => setShowRefreshSuccess(false), 2000);
+    } catch (error) {
+      console.error('💥 WeeklyDetailView - Refresh error:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // DEBUG: Log data to understand what's being passed
+  console.log('📊 WeeklyDetailView - Debug Info:');
+  console.log('  - weeklyCashflows:', weeklyCashflows.length);
+  console.log('  - transactions:', transactions.length);
+  console.log('  - selectedWeek:', selectedWeek);
   
-  if (!selectedWeekData) return null;
+  const selectedWeekData = weeklyCashflows.find(w => w.weekNumber === selectedWeek);
+  console.log('  - selectedWeekData:', selectedWeekData ? 'found' : 'NOT FOUND');
+  
+  if (!selectedWeekData) {
+    console.error('❌ WeeklyDetailView - selectedWeekData not found for week:', selectedWeek);
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-screen overflow-y-auto">
+          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <h2 className="text-xl font-semibold text-gray-900">Weekly Detail View</h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="px-6 py-8">
+            <div className="text-center">
+              <div className="text-red-500 text-4xl mb-4">⚠️</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Week Data Found</h3>
+              <p className="text-gray-600 mb-4">
+                Could not find data for week {selectedWeek}. Available weeks: {weeklyCashflows.map(w => w.weekNumber).join(', ') || 'none'}
+              </p>
+              <button
+                onClick={onClose}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Get transactions for this week using proper date comparison
   const weekTransactions = transactions.filter(transaction => 
     isDateInWeek(transaction.date, selectedWeekData.weekStart)
   );
+
+  console.log('  - weekTransactions for week', selectedWeek, ':', weekTransactions.length);
 
   // Get estimates for this week
   const weekEstimates = selectedWeekData.estimates;
@@ -93,6 +159,21 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
   const inflowCategories = getWeeklyCategories('inflow');
   const outflowCategories = getWeeklyCategories('outflow');
   const activeCategories = activeTab === 'inflow' ? inflowCategories : outflowCategories;
+
+  console.log('  - inflowCategories:', inflowCategories.length);
+  console.log('  - outflowCategories:', outflowCategories.length);
+  console.log('  - activeCategories:', activeCategories.length);
+  console.log('  - weekEstimates:', weekEstimates.length);
+
+  // Check if we have any data at all
+  const hasAnyTransactions = transactions.length > 0;
+  const hasAnyEstimates = weekEstimates.length > 0;
+  const hasWeekTransactions = weekTransactions.length > 0;
+  
+  console.log('📊 WeeklyDetailView - Data Summary:');
+  console.log('  - hasAnyTransactions:', hasAnyTransactions);
+  console.log('  - hasAnyEstimates:', hasAnyEstimates);
+  console.log('  - hasWeekTransactions:', hasWeekTransactions);
 
   const CategoryCard: React.FC<{ data: CategoryData; type: 'inflow' | 'outflow' }> = ({ data, type }) => (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
@@ -171,14 +252,46 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
               <h2 className="text-2xl font-bold text-gray-900">Weekly Cashflow Details</h2>
               <p className="text-gray-600 mt-1">Detailed breakdown by category</p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="flex items-center space-x-2">
+              {onRefreshData && (
+                <>
+                  <button
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className={`p-2 rounded-full transition-colors ${
+                      isRefreshing 
+                        ? 'text-blue-400 bg-blue-50 cursor-not-allowed' 
+                        : 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
+                    }`}
+                    title={isRefreshing ? 'Refreshing data...' : 'Refresh data from Firebase'}
+                  >
+                    <svg 
+                      className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                  
+                  {/* Success notification */}
+                  {showRefreshSuccess && (
+                    <div className="text-green-600 text-sm font-medium animate-fade-in">
+                      ✅ Refreshed!
+                    </div>
+                  )}
+                </>
+              )}
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
         
@@ -282,15 +395,56 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
             </div>
           ) : (
             <div className="text-center py-12">
-              <div className="text-gray-400 mb-2">
-                {activeTab === 'inflow' ? '💰' : '💸'}
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-1">
-                No {activeTab}s for this week
-              </h3>
-              <p className="text-gray-500">
-                No transactions or estimates found for Week {selectedWeek}
-              </p>
+              {!hasAnyTransactions && !hasAnyEstimates ? (
+                // No data at all - likely a data loading issue
+                <div className="max-w-md mx-auto">
+                  <div className="text-yellow-500 text-4xl mb-4">⚠️</div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Loaded</h3>
+                  <p className="text-gray-600 mb-4">
+                    It looks like no transaction data or estimates have been loaded. This could be due to:
+                  </p>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                    <ul className="text-left text-sm text-yellow-800 space-y-1">
+                      <li>• Data still loading from Firebase</li>
+                      <li>• Firebase connection issues</li>
+                      <li>• No data uploaded yet</li>
+                      <li>• Authentication problems</li>
+                    </ul>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Debug: {transactions.length} transactions, {weekEstimates.length} estimates for this week
+                  </div>
+                </div>
+              ) : !hasWeekTransactions && !hasAnyEstimates ? (
+                // Has data overall, but none for this specific week
+                <div>
+                  <div className="text-gray-400 mb-2">
+                    {activeTab === 'inflow' ? '💰' : '💸'}
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">
+                    No {activeTab}s for Week {selectedWeek}
+                  </h3>
+                  <p className="text-gray-500 mb-4">
+                    No transactions or estimates found for this week
+                  </p>
+                  <div className="text-xs text-gray-500">
+                    Total data available: {transactions.length} transactions, {weekEstimates.length} estimates
+                  </div>
+                </div>
+              ) : (
+                // Default empty state
+                <div>
+                  <div className="text-gray-400 mb-2">
+                    {activeTab === 'inflow' ? '💰' : '💸'}
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">
+                    No {activeTab}s for this week
+                  </h3>
+                  <p className="text-gray-500">
+                    No transactions or estimates found for Week {selectedWeek}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
