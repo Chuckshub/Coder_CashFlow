@@ -93,23 +93,46 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm() || !type) return;
+  const handleSave = () => {
+    if (!validateForm() || !type) {
+      console.error('Cannot save: validation failed or type is null');
+      return;
+    }
 
     const estimateData: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'> = {
       amount: parseFloat(formData.amount),
-      type,
+      type, // TypeScript now knows this is not null
       category: formData.category.trim(),
       description: formData.description.trim(),
-      notes: formData.notes.trim() || undefined,
       weekNumber,
-      isRecurring: formData.isRecurring,
-      recurringType: formData.isRecurring ? formData.recurringType : undefined
+      isRecurring: formData.isRecurring
     };
 
+    // Only add notes if it has a value
+    const trimmedNotes = formData.notes.trim();
+    if (trimmedNotes) {
+      estimateData.notes = trimmedNotes;
+    }
+    // If no notes, don't add the field at all (leave it undefined in the type, but don't explicitly set it)
+
+    // Only add recurringType if recurring is enabled
+    if (formData.isRecurring && formData.recurringType) {
+      estimateData.recurringType = formData.recurringType;
+    }
+    // If not recurring, don't add the field at all
+
+    console.log('📄 EstimateModal - Creating estimate data:', {
+      ...estimateData,
+      hasNotes: 'notes' in estimateData,
+      hasRecurringType: 'recurringType' in estimateData
+    });
+
     onSave(estimateData);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSave();
   };
 
   const handleCategorySelect = (category: string) => {

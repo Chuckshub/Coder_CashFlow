@@ -359,6 +359,12 @@ export class SimpleFirebaseService {
    */
   async saveEstimate(estimate: Estimate, userDisplayName: string, userEmail: string): Promise<{ success: boolean; error?: string }> {
     console.log('💾 Saving estimate...', estimate.id, estimate.description);
+    console.log('🔍 Raw estimate data:', {
+      notes: estimate.notes,
+      notesType: typeof estimate.notes,
+      recurringType: estimate.recurringType,
+      recurringTypeType: typeof estimate.recurringType
+    });
     
     if (!db) {
       return { success: false, error: 'Firebase not initialized' };
@@ -368,8 +374,8 @@ export class SimpleFirebaseService {
       const collectionRef = collection(db, this.getEstimatesCollectionPath());
       const docRef = doc(collectionRef, estimate.id);
       
-      // Create the Firebase estimate object, filtering out undefined values
-      const firebaseEstimate: FirebaseEstimate = {
+      // Build Firebase estimate object step by step, avoiding undefined values entirely
+      const firebaseEstimate: any = {
         id: estimate.id,
         userId: this.userId,
         amount: estimate.amount,
@@ -384,21 +390,36 @@ export class SimpleFirebaseService {
         createdByUserId: this.userId
       };
       
-      // Only add optional fields if they have values (not undefined)
-      if (estimate.notes !== undefined && estimate.notes !== null && estimate.notes !== '') {
-        firebaseEstimate.notes = estimate.notes;
+      // Only add notes if it has a real value
+      if (estimate.notes && estimate.notes.trim() !== '') {
+        firebaseEstimate.notes = estimate.notes.trim();
+        console.log('✅ Adding notes field:', estimate.notes.trim());
+      } else {
+        console.log('⚠️ Skipping notes field - value is:', estimate.notes);
       }
       
-      if (estimate.recurringType !== undefined && estimate.recurringType !== null) {
+      // Only add recurringType if it has a real value
+      if (estimate.recurringType) {
         firebaseEstimate.recurringType = estimate.recurringType;
+        console.log('✅ Adding recurringType field:', estimate.recurringType);
+      } else {
+        console.log('⚠️ Skipping recurringType field - value is:', estimate.recurringType);
       }
       
-      console.log('💾 Final estimate data for Firebase:', {
-        id: firebaseEstimate.id,
-        hasNotes: !!firebaseEstimate.notes,
-        hasRecurringType: !!firebaseEstimate.recurringType,
-        description: firebaseEstimate.description
-      });
+      console.log('💾 Final Firebase document structure:');
+      console.log('Fields to save:', Object.keys(firebaseEstimate));
+      console.log('Has notes field:', 'notes' in firebaseEstimate);
+      console.log('Has recurringType field:', 'recurringType' in firebaseEstimate);
+      
+      // Double-check for any undefined values
+      const undefinedFields = Object.entries(firebaseEstimate)
+        .filter(([key, value]) => value === undefined)
+        .map(([key]) => key);
+      
+      if (undefinedFields.length > 0) {
+        console.error('❌ Found undefined fields:', undefinedFields);
+        return { success: false, error: `Cannot save estimate: found undefined fields: ${undefinedFields.join(', ')}` };
+      }
       
       await setDoc(docRef, firebaseEstimate);
       console.log('✅ Estimate saved successfully:', estimate.id);
@@ -408,6 +429,7 @@ export class SimpleFirebaseService {
     } catch (error) {
       const errorMsg = `Failed to save estimate: ${error instanceof Error ? error.message : 'Unknown error'}`;
       console.error('💥 Error saving estimate:', error);
+      console.error('💥 Full error object:', JSON.stringify(error, null, 2));
       return { success: false, error: errorMsg };
     }
   }
