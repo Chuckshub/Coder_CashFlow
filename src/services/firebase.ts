@@ -26,6 +26,7 @@ const validateConfig = () => {
   
   console.log('🔍 Firebase Environment Variable Check:');
   console.log('NODE_ENV:', process.env.NODE_ENV);
+  console.log('Available environment variables:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP_')));
   
   const envStatus = requiredKeys.map(key => {
     const value = process.env[key];
@@ -39,11 +40,26 @@ const validateConfig = () => {
   
   if (missing.length > 0) {
     console.warn('❌ Missing Firebase environment variables:', missing.join(', '));
-    console.warn('🔧 Add these to your Vercel environment variables and redeploy.');
+    console.warn('🔧 Add these to your .env.local file or deployment environment variables.');
+    console.warn('📋 Current working directory:', process.cwd());
+    console.warn('📋 Check if .env.local file exists and is readable');
     return false;
   }
   
-  console.log('✅ All Firebase environment variables found!');
+  // Validate config values aren't just placeholder text
+  const placeholderValues = ['your_api_key_here', 'your_project_id', 'test_key', 'test_project'];
+  const hasPlaceholders = requiredKeys.some(key => {
+    const value = process.env[key];
+    return value && placeholderValues.some(placeholder => value.includes(placeholder));
+  });
+  
+  if (hasPlaceholders) {
+    console.warn('❌ Firebase environment variables contain placeholder values!');
+    console.warn('🔧 Replace placeholder values with actual Firebase configuration.');
+    return false;
+  }
+  
+  console.log('✅ All Firebase environment variables found and validated!');
   return true;
 };
 

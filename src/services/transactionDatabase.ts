@@ -1,21 +1,15 @@
 import { 
   collection, 
   doc, 
-  setDoc, 
   getDocs, 
   query, 
   where, 
-  orderBy, 
-  Timestamp,
-  writeBatch,
-  getDoc
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Transaction, RawTransaction } from '../types';
 import { 
-  createTransactionHashFromRaw, 
-  createTransactionHashFromProcessed,
-  filterDuplicateTransactions
+  createTransactionHashFromProcessed
 } from '../utils/transactionHash';
 import { convertToTransaction } from '../utils/csvParser';
 import { categorizeTransactions } from '../utils/transactionCategorizer';
@@ -189,6 +183,10 @@ export const saveTransactions = async (
   userId: string
 ): Promise<{ saved: number; duplicates: number; errors: string[] }> => {
   console.log('🔄 saveTransactions called with', rawTransactions.length, 'transactions for userId:', userId);
+  console.log('🔍 Firebase status check:');
+  console.log('  - db exists:', !!db);
+  console.log('  - userId provided:', !!userId);
+  console.log('  - Firebase enabled:', require('./firebase').isFirebaseEnabled);
   
   const results = {
     saved: 0,
@@ -197,14 +195,15 @@ export const saveTransactions = async (
   };
 
   if (!db) {
-    const error = 'Firebase database not initialized';
+    const error = 'Firebase database not initialized. Check environment variables.';
     console.error('❌', error);
+    console.error('🔧 Debug: Make sure all REACT_APP_FIREBASE_* environment variables are set.');
     results.errors.push(error);
     return results;
   }
 
   if (!userId) {
-    const error = 'User ID is required';
+    const error = 'User ID is required for saving transactions';
     console.error('❌', error);
     results.errors.push(error);
     return results;
@@ -236,8 +235,15 @@ export const saveTransactions = async (
     const newHashes = transactionsWithHashes.map(t => t.hash!).filter(Boolean);
     console.log('🔍 Checking', newHashes.length, 'hashes for duplicates');
     
-    const existingHashes = await checkExistingTransactions(newHashes, userId);
-    console.log('✅ Duplicate check completed, found', existingHashes.size, 'existing hashes');
+    let existingHashes: Set<string>;
+    try {
+      existingHashes = await checkExistingTransactions(newHashes, userId);
+      console.log('✅ Duplicate check completed, found', existingHashes.size, 'existing hashes');
+    } catch (duplicateCheckError) {
+      console.error('❌ Error during duplicate check:', duplicateCheckError);
+      console.warn('⚠️ Proceeding without duplicate check to avoid blocking upload');
+      existingHashes = new Set();
+    }
 
     // Filter out duplicates
     const uniqueTransactions = transactionsWithHashes.filter(transaction => {
@@ -262,6 +268,9 @@ export const saveTransactions = async (
 
     // CRITICAL: Batch write to database with detailed logging
     console.log('💾 STARTING CRITICAL BATCH WRITE OPERATION');
+    console.log('💾 Firebase db object type:', typeof db);
+    console.log('💾 Firebase db constructor:', db?.constructor?.name);
+    
     const batch = writeBatch(db);
     const collectionPath = COLLECTIONS.USER_TRANSACTIONS(userId);
     const transactionsRef = collection(db, collectionPath);
@@ -272,48 +281,91 @@ export const saveTransactions = async (
     console.log('💾 About to add', uniqueTransactions.length, 'transactions to batch');
 
     let batchItemsAdded = 0;
+    const transactionErrors: string[] = [];
+    
     uniqueTransactions.forEach((transaction, index) => {
       try {
         const docRef = doc(transactionsRef, transaction.id);
         const dbTransaction = transactionToDatabase(transaction, userId);
+        
+        // Validate the transaction data before adding to batch
+        if (!dbTransaction.id || !dbTransaction.date || !dbTransaction.description) {
+          throw new Error(`Invalid transaction data: missing required fields`);
+        }
         
         console.log(`📄 [${index + 1}/${uniqueTransactions.length}] Adding to batch:`, {
           docId: transaction.id,
           docRef: !!docRef,
           dbTransaction: !!dbTransaction,
           description: transaction.description.substring(0, 30) + '...',
-          amount: transaction.amount
+          amount: transaction.amount,
+          hasRequiredFields: !!(dbTransaction.id && dbTransaction.date && dbTransaction.description)
         });
         
         batch.set(docRef, dbTransaction);
         batchItemsAdded++;
       } catch (error) {
+        const errorMsg = `Failed to add transaction ${transaction.id} to batch: ${error}`;
         console.error(`❌ Error adding transaction ${index + 1} to batch:`, error);
-        results.errors.push(`Failed to add transaction ${transaction.id}: ${error}`);
+        transactionErrors.push(errorMsg);
       }
     });
+    
+    if (transactionErrors.length > 0) {
+      console.error('❌ Errors occurred while preparing batch:', transactionErrors);
+      results.errors.push(...transactionErrors);
+    }
+    
+    if (batchItemsAdded === 0) {
+      const error = 'No transactions were successfully added to batch';
+      console.error('❌', error);
+      results.errors.push(error);
+      return results;
+    }
     
     console.log('💾 Successfully added', batchItemsAdded, 'items to batch');
     console.log('💾 COMMITTING BATCH - This is the critical moment...');
     
-    // The critical batch commit
+    // The critical batch commit with timeout and retry logic
     const startTime = Date.now();
-    await batch.commit();
-    const endTime = Date.now();
     
-    console.log('\u2705 BATCH COMMIT COMPLETED in', endTime - startTime, 'ms');
-    console.log('\u2705 Should have written', batchItemsAdded, 'documents to', collectionPath);
-    
+    try {
+      // Add a timeout to the batch commit
+      const commitPromise = batch.commit();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Batch commit timeout after 30 seconds')), 30000)
+      );
+      
+      await Promise.race([commitPromise, timeoutPromise]);
+      
+      const endTime = Date.now();
+      console.log('✅ BATCH COMMIT COMPLETED in', endTime - startTime, 'ms');
+      console.log('✅ Should have written', batchItemsAdded, 'documents to', collectionPath);
+      
+    } catch (commitError) {
+      const errorMsg = `Batch commit failed: ${commitError instanceof Error ? commitError.message : 'Unknown commit error'}`;
+      console.error('❌ BATCH COMMIT FAILED:', commitError);
+      console.error('❌ Commit error details:', {
+        name: (commitError as Error)?.name,
+        message: (commitError as Error)?.message,
+        code: (commitError as any)?.code,
+        stack: (commitError as Error)?.stack
+      });
+      results.errors.push(errorMsg);
+      return results;
+    }
+
     // IMMEDIATE VERIFICATION: Check if documents actually exist
-    console.log('\ud83d\udd0d IMMEDIATE VERIFICATION: Checking if documents were actually written...');
+    console.log('🔍 IMMEDIATE VERIFICATION: Checking if documents were actually written...');
     try {
       const verificationQuery = await getDocs(collection(db, collectionPath));
-      console.log('\ud83d\udd0d VERIFICATION RESULT: Found', verificationQuery.size, 'documents in collection');
+      console.log('🔍 VERIFICATION RESULT: Found', verificationQuery.size, 'documents in collection');
       
-      if (verificationQuery.size !== batchItemsAdded) {
-        console.error('\u274c VERIFICATION FAILED: Expected', batchItemsAdded, 'documents, found', verificationQuery.size);
+      if (verificationQuery.size < batchItemsAdded) {
+        console.error('❌ VERIFICATION WARNING: Expected at least', batchItemsAdded, 'documents, found', verificationQuery.size);
+        console.error('❌ This might indicate a partial write or indexing delay');
       } else {
-        console.log('\u2705 VERIFICATION PASSED: Document count matches expected');
+        console.log('✅ VERIFICATION PASSED: Document count looks good');
       }
       
       // List some document IDs for verification
@@ -321,12 +373,13 @@ export const saveTransactions = async (
       verificationQuery.forEach(doc => {
         foundDocIds.push(doc.id);
         if (foundDocIds.length <= 3) {
-          console.log('\ud83d\udcc4 VERIFICATION: Found doc ID:', doc.id);
+          console.log('📄 VERIFICATION: Found doc ID:', doc.id);
         }
       });
       
     } catch (verificationError) {
-      console.error('\u274c VERIFICATION ERROR:', verificationError);
+      console.error('❌ VERIFICATION ERROR:', verificationError);
+      // Don't fail the entire operation just because verification failed
     }
     
     results.saved = uniqueTransactions.length;
@@ -337,7 +390,13 @@ export const saveTransactions = async (
   } catch (error) {
     const errorMessage = `Database save failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
     console.error('💥 CRITICAL ERROR in saveTransactions:', error);
-    console.error('💥 Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('💥 Error details:', {
+      name: (error as Error)?.name,
+      message: (error as Error)?.message,
+      code: (error as any)?.code,
+      stack: (error as Error)?.stack?.substring(0, 500)
+    });
+    console.error('💥 Error occurred at timestamp:', new Date().toISOString());
     results.errors.push(errorMessage);
     return results;
   }

@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import UserHeader from './components/common/UserHeader';
 import CSVUpload from './components/DataImport/CSVUpload';
+import FirebaseStatus from './components/common/FirebaseStatus';
 import CashflowTable from './components/CashflowTable/CashflowTable';
 import { Transaction, Estimate, WeeklyCashflow, RawTransaction } from './types';
 import { formatCurrency, generate13Weeks } from './utils/dateUtils';
@@ -338,13 +339,39 @@ function DatabaseApp() {
                 </div>
                 <div className="ml-3">
                   <h3 className="text-sm font-medium text-red-800">Error</h3>
-                  <p className="text-sm text-red-700 mt-1">{error}</p>
-                  <button
-                    onClick={clearError}
-                    className="text-sm text-red-600 hover:text-red-500 mt-2 underline"
-                  >
-                    Dismiss
-                  </button>
+                  <div className="mt-2 text-sm text-red-700">
+                    <div className="font-medium mb-1">Error Details:</div>
+                    <div className="bg-red-100 p-2 rounded text-xs font-mono whitespace-pre-wrap">
+                      {error}
+                    </div>
+                    
+                    {/* Common Solutions */}
+                    {error.toLowerCase().includes('firebase') && (
+                      <div className="mt-3">
+                        <div className="font-medium mb-1">Common Solutions:</div>
+                        <ul className="list-disc list-inside text-xs space-y-1">
+                          <li>Check that all Firebase environment variables are set</li>
+                          <li>Verify Firebase project exists and is accessible</li>
+                          <li>Check Firestore security rules allow writes for authenticated users</li>
+                          <li>Make sure you're authenticated (logged in)</li>
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {error.toLowerCase().includes('authentication') && (
+                      <div className="mt-3">
+                        <div className="font-medium mb-1">Authentication Issue:</div>
+                        <p className="text-xs">Please log out and log back in to refresh your authentication.</p>
+                      </div>
+                    )}
+                    
+                    <button
+                      onClick={clearError}
+                      className="text-sm text-red-600 hover:text-red-500 mt-3 underline"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -365,8 +392,34 @@ function DatabaseApp() {
                 </div>
               </div>
               {uploadStats.errors.length > 0 && (
-                <div className="mt-2 text-sm text-red-700">
-                  <span className="font-medium">❌ Errors:</span> {uploadStats.errors.join(', ')}
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
+                  <div className="font-medium text-red-800 mb-2">❌ Upload Errors ({uploadStats.errors.length}):</div>
+                  <div className="space-y-2">
+                    {uploadStats.errors.map((error, index) => (
+                      <div key={index} className="text-xs text-red-700 bg-red-100 p-2 rounded font-mono">
+                        {error}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Error Analysis */}
+                  <div className="mt-3 pt-2 border-t border-red-200">
+                    <div className="text-xs text-red-600">
+                      <strong>Troubleshooting Tips:</strong>
+                      <ul className="list-disc list-inside mt-1 space-y-1">
+                        {uploadStats.errors.some(e => e.toLowerCase().includes('firebase')) && (
+                          <li>Firebase connection issue - check environment variables</li>
+                        )}
+                        {uploadStats.errors.some(e => e.toLowerCase().includes('batch')) && (
+                          <li>Database write issue - check Firestore permissions</li>
+                        )}
+                        {uploadStats.errors.some(e => e.toLowerCase().includes('auth')) && (
+                          <li>Authentication issue - try logging out and back in</li>
+                        )}
+                        <li>Check the browser console for detailed error logs</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -427,6 +480,7 @@ function DatabaseApp() {
         {/* Upload View */}
         {activeView === 'upload' && (
           <div className="px-4 sm:px-0">
+            <FirebaseStatus showDetails={true} />
             <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
               <h3 className="text-sm font-medium text-green-800 mb-1">🔒 Hash-Protected Uploads</h3>
               <p className="text-sm text-green-700">
