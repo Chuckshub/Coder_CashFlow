@@ -162,6 +162,8 @@ export class SimpleFirebaseService {
    */
   async loadTransactions(): Promise<Transaction[]> {
     console.log('📥 Loading transactions from Firebase...');
+    console.log('🔑 User ID:', this.userId);
+    console.log('📁 Collection path:', this.getCollectionPath());
     
     if (!db) {
       console.error('Firebase not initialized');
@@ -173,11 +175,18 @@ export class SimpleFirebaseService {
       const snapshot = await getDocs(collectionRef);
       
       console.log('📊 Found', snapshot.size, 'documents');
+      console.log('📁 Collection reference path:', collectionRef.path);
       
       const transactions: Transaction[] = [];
       
       snapshot.forEach(doc => {
         const data = doc.data() as FirebaseTransaction;
+        console.log('📄 Processing doc:', doc.id, 'with data:', {
+          id: data.id,
+          description: data.description?.substring(0, 30) + '...',
+          amount: data.amount,
+          date: data.date?.toDate?.()?.toDateString?.()
+        });
         
         try {
           const transaction: Transaction = {
@@ -203,6 +212,14 @@ export class SimpleFirebaseService {
       transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
       
       console.log('✅ Loaded', transactions.length, 'transactions');
+      if (transactions.length > 0) {
+        console.log('📄 First transaction:', {
+          id: transactions[0].id,
+          description: transactions[0].description.substring(0, 50),
+          date: transactions[0].date.toDateString(),
+          amount: transactions[0].amount
+        });
+      }
       return transactions;
       
     } catch (error) {

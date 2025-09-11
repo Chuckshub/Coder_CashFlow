@@ -223,6 +223,19 @@ function DatabaseApp() {
         setError(`Upload completed with ${result.errors.length} errors. Check console for details.`);
       } else {
         console.log('✅ SIMPLIFIED upload completed successfully');
+        
+        // FORCE CACHE REFRESH after successful upload
+        console.log('🔄 FORCING cache refresh and data reload...');
+        const dataLoader = getSimpleDataLoader(currentUser.uid);
+        
+        // Invalidate cache
+        dataLoader.invalidateCache('transactions');
+        
+        // Force reload with real-time enabled
+        setTimeout(async () => {
+          console.log('🔄 Reloading transactions after successful upload...');
+          await dataLoader.loadTransactions(true, true);
+        }, 1000); // Small delay to ensure Firebase has processed the writes
       }
       
       // Data will update automatically via real-time subscription
@@ -346,14 +359,27 @@ function DatabaseApp() {
               }`}></div>
               <span className="text-gray-500">
                 {dataLoadingState.isLoading ? 'Syncing...' :
-                 dataLoadingState.isError ? 'Error' :
-                 dataLoadingState.hasData ? `${transactions.length} transactions` : 'No data'}
+                 dataLoadingState.isError ? `Error: ${dataLoadingState.errorMessage}` :
+                 dataLoadingState.hasData ? `${transactions.length} transactions` : 'No data loaded'}
               </span>
               {dataLoadingState.lastUpdated && (
                 <span className="text-gray-400">
                   Updated {dataLoadingState.lastUpdated.toLocaleTimeString()}
                 </span>
               )}
+              {/* Debug reload button */}
+              <button
+                onClick={async () => {
+                  console.log('🔄 Manual reload triggered...');
+                  const dataLoader = getSimpleDataLoader(currentUser?.uid || '');
+                  dataLoader.invalidateCache();
+                  await dataLoader.loadTransactions(true, true);
+                }}
+                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                title="Force reload transactions"
+              >
+                🔄 Reload
+              </button>
             </div>
           </div>
         </div>
