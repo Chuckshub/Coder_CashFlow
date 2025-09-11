@@ -12,6 +12,7 @@ import {
   getUserTransactions,
   debugCountUserTransactions
 } from './services/transactionDatabase';
+import { testFirebaseConnection } from './utils/firebaseTest';
 
 type ActiveView = 'upload' | 'cashflow';
 
@@ -226,8 +227,26 @@ function DatabaseApp() {
   }, [currentUser?.uid, loadTransactionsFromDatabase]);
 
   const handleCSVError = useCallback((error: string) => {
-    setError(`CSV Error: ${error}`);
+    setError(error);
   }, []);
+  
+  const handleFirebaseTest = useCallback(async () => {
+    if (!currentUser?.uid) {
+      setError('User not authenticated');
+      return;
+    }
+    
+    console.log('🧪 Starting Firebase connection test...');
+    const result = await testFirebaseConnection(currentUser.uid);
+    
+    if (result.success) {
+      console.log('✅ Firebase test completed successfully');
+      alert(`Firebase test successful!\n\nTest doc created: ${result.testDocId}\nUser collection docs: ${result.userCollectionSize}\nDoc IDs: ${result.userDocIds?.join(', ')}`);
+    } else {
+      console.error('❌ Firebase test failed:', result.error);
+      setError(`Firebase test failed: ${result.error}`);
+    }
+  }, [currentUser?.uid]);
 
   const addEstimate = useCallback(async (estimateData: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => {
     // For now, store estimates in memory (could be extended to database later)
@@ -289,12 +308,11 @@ function DatabaseApp() {
                 </button>
                 <button
                   onClick={() => setActiveView('cashflow')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                     activeView === 'cashflow'
                       ? 'bg-blue-100 text-blue-700'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
-                  disabled={transactions.length === 0}
                 >
                   Cashflow Table
                 </button>
@@ -392,6 +410,13 @@ function DatabaseApp() {
                     className="text-sm text-blue-600 hover:text-blue-800 underline disabled:opacity-50"
                   >
                     🔄 Refresh
+                  </button>
+                  <button
+                    onClick={handleFirebaseTest}
+                    disabled={isLoading}
+                    className="text-sm text-red-600 hover:text-red-800 underline disabled:opacity-50 ml-3"
+                  >
+                    🧪 Test Firebase
                   </button>
                 </div>
               </div>
