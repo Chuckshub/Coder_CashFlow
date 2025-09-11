@@ -52,7 +52,7 @@ export interface DatabaseTransaction {
  * Convert Transaction to database format
  */
 function transactionToDatabase(transaction: Transaction, userId: string): DatabaseTransaction {
-  return {
+  const dbTransaction: any = {
     id: transaction.id,
     hash: transaction.hash || createTransactionHashFromProcessed(transaction),
     date: transaction.date.toISOString(),
@@ -60,12 +60,18 @@ function transactionToDatabase(transaction: Transaction, userId: string): Databa
     amount: transaction.amount,
     type: transaction.type,
     category: transaction.category,
-    subcategory: transaction.subcategory,
     balance: transaction.balance,
     userId,
     createdAt: new Date().toISOString(),
     originalData: transaction.originalData
   };
+  
+  // Only add subcategory if it exists (Firestore doesn't allow undefined)
+  if (transaction.subcategory !== undefined && transaction.subcategory !== null) {
+    dbTransaction.subcategory = transaction.subcategory;
+  }
+  
+  return dbTransaction as DatabaseTransaction;
 }
 
 /**
@@ -80,7 +86,7 @@ function databaseToTransaction(dbTransaction: DatabaseTransaction): Transaction 
     amount: dbTransaction.amount,
     type: dbTransaction.type,
     category: dbTransaction.category,
-    subcategory: dbTransaction.subcategory,
+    subcategory: dbTransaction.subcategory || undefined, // Handle missing subcategory
     balance: dbTransaction.balance,
     originalData: dbTransaction.originalData
   };
