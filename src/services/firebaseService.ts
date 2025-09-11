@@ -55,7 +55,7 @@ export interface FirebaseTransaction {
   amount: number;
   type: 'inflow' | 'outflow';
   category: string;
-  subcategory?: string;
+  subcategory?: string; // Optional field - only present if has value
   balance: number;
   originalData: RawTransaction;
   createdAt: Timestamp;
@@ -197,12 +197,16 @@ export class TransactionManager {
             amount: trans.amount,
             type: trans.type,
             category: trans.category,
-            subcategory: trans.subcategory,
             balance: trans.balance,
             originalData: trans.originalData,
             createdAt: Timestamp.now(),
             updatedAt: Timestamp.now()
           };
+          
+          // Only add subcategory if it has a value (Firebase doesn't allow undefined)
+          if (trans.subcategory !== undefined && trans.subcategory !== null && trans.subcategory !== '') {
+            firebaseData.subcategory = trans.subcategory;
+          }
           
           return { ref: docRef, data: firebaseData };
         });
@@ -292,7 +296,7 @@ export class TransactionManager {
             amount: data.amount,
             type: data.type,
             category: data.category,
-            subcategory: data.subcategory,
+            subcategory: data.subcategory, // Will be undefined if not present, which is correct
             balance: data.balance,
             originalData: data.originalData
           };
@@ -391,7 +395,7 @@ export class TransactionManager {
             amount: data.amount,
             type: data.type,
             category: data.category,
-            subcategory: data.subcategory,
+            subcategory: data.subcategory, // Will be undefined if not present, which is correct
             balance: data.balance,
             originalData: data.originalData
           };
