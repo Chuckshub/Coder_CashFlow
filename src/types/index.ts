@@ -12,7 +12,6 @@ export interface RawTransaction {
 // Processed transaction with categorization
 export interface Transaction {
   id: string;
-  hash: string; // Unique hash for duplicate detection
   date: Date;
   description: string;
   amount: number;
@@ -20,6 +19,7 @@ export interface Transaction {
   category: string;
   subcategory?: string;
   balance: number;
+  hash?: string; // Unique hash for duplicate detection
   originalData: RawTransaction;
 }
 

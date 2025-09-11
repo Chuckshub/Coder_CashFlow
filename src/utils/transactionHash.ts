@@ -1,34 +1,41 @@
-import { Transaction, RawTransaction } from '../types';
+import { RawTransaction, Transaction } from '../types';
 
 /**
- * Creates a hash from transaction data to prevent duplicates
- * Uses date, amount, and description to create a unique identifier
+ * Create a unique hash for a transaction based on date, amount, and description
+ * This helps prevent duplicate transactions in the database
  */
-export const createTransactionHash = (date: string, amount: number, description: string): string => {
-  // Normalize the data
+export const createTransactionHash = (
+  date: string,
+  amount: number,
+  description: string
+): string => {
+  // Normalize the inputs
   const normalizedDate = new Date(date).toISOString().split('T')[0]; // YYYY-MM-DD format
-  const normalizedAmount = Math.abs(amount).toFixed(2); // Always positive, 2 decimals
-  const normalizedDescription = description.trim().toUpperCase(); // Uppercase, trimmed
+  const normalizedAmount = Math.round(amount * 100) / 100; // Round to 2 decimal places
+  const normalizedDescription = description.trim().toUpperCase(); // Consistent case
   
-  // Create a simple hash string
-  const hashString = `${normalizedDate}|${normalizedAmount}|${normalizedDescription}`;
+  // Create the hash input string
+  const hashInput = `${normalizedDate}|${normalizedAmount}|${normalizedDescription}`;
   
-  // Create a simple hash using built-in methods
-  let hash = 0;
-  for (let i = 0; i < hashString.length; i++) {
-    const char = hashString.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  
-  // Return as positive hex string
-  return Math.abs(hash).toString(16);
+  // For browser compatibility, use a simple hash function instead of crypto
+  return simpleHash(hashInput);
 };
 
 /**
- * Creates hash from a processed Transaction object
+ * Create hash from raw transaction data
  */
-export const createTransactionHashFromTransaction = (transaction: Transaction): string => {
+export const createTransactionHashFromRaw = (raw: RawTransaction): string => {
+  return createTransactionHash(
+    raw['Posting Date'],
+    raw.Amount,
+    raw.Description
+  );
+};
+
+/**
+ * Create hash from processed transaction
+ */
+export const createTransactionHashFromProcessed = (transaction: Transaction): string => {
   return createTransactionHash(
     transaction.date.toISOString(),
     transaction.amount,
@@ -37,55 +44,76 @@ export const createTransactionHashFromTransaction = (transaction: Transaction): 
 };
 
 /**
- * Creates hash from a raw CSV transaction
+ * Simple hash function that works in browsers
+ * Based on Java's String.hashCode() algorithm
  */
-export const createTransactionHashFromRaw = (rawTransaction: RawTransaction): string => {
-  return createTransactionHash(
-    rawTransaction['Posting Date'],
-    rawTransaction.Amount,
-    rawTransaction.Description
-  );
+function simpleHash(str: string): string {
+  let hash = 0;
+  if (str.length === 0) return hash.toString();
+  
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  
+  // Convert to positive hex string
+  return Math.abs(hash).toString(16);
+}
+
+/**
+ * Check if two transactions are duplicates based on their hashes
+ */
+export const areTransactionsDuplicate = (
+  transaction1: Transaction,
+  transaction2: Transaction
+): boolean => {
+  const hash1 = createTransactionHashFromProcessed(transaction1);
+  const hash2 = createTransactionHashFromProcessed(transaction2);
+  return hash1 === hash2;
 };
 
 /**
- * Check if a transaction hash already exists in a list of transactions
- */
-export const isTransactionDuplicate = (hash: string, existingTransactions: Transaction[]): boolean => {
-  return existingTransactions.some(transaction => {
-    const existingHash = createTransactionHashFromTransaction(transaction);
-    return existingHash === hash;
-  });
-};
-
-/**
- * Filter out duplicate transactions from a list
+ * Filter out duplicate transactions from an array
  */
 export const filterDuplicateTransactions = (
-  newTransactions: Transaction[], 
-  existingTransactions: Transaction[] = []
+  newTransactions: Transaction[],
+  existingTransactions: Transaction[]
 ): Transaction[] => {
-  const existingHashes = existingTransactions.map(createTransactionHashFromTransaction);
+  const existingHashes = new Set(
+    existingTransactions.map(t => createTransactionHashFromProcessed(t))
+  );
   
   return newTransactions.filter(transaction => {
-    const hash = createTransactionHashFromTransaction(transaction);
-    return !existingHashes.includes(hash);
+    const hash = createTransactionHashFromProcessed(transaction);
+    return !existingHashes.has(hash);
   });
 };
 
 /**
- * Get transaction statistics including duplicates found
+ * Get unique transactions within a single array
  */
-export const getTransactionStats = (
-  newTransactions: Transaction[], 
-  existingTransactions: Transaction[] = []
-) => {
-  const uniqueTransactions = filterDuplicateTransactions(newTransactions, existingTransactions);
-  const duplicatesFound = newTransactions.length - uniqueTransactions.length;
+export const getUniqueTransactions = (transactions: Transaction[]): Transaction[] => {
+  const seenHashes = new Set<string>();
+  const uniqueTransactions: Transaction[] = [];
   
-  return {
-    total: newTransactions.length,
-    unique: uniqueTransactions.length,
-    duplicates: duplicatesFound,
-    uniqueTransactions
-  };
+  for (const transaction of transactions) {
+    const hash = createTransactionHashFromProcessed(transaction);
+    if (!seenHashes.has(hash)) {
+      seenHashes.add(hash);
+      uniqueTransactions.push({
+        ...transaction,
+        hash // Add hash to the transaction for future reference
+      });
+    }
+  }
+  
+  return uniqueTransactions;
+};
+
+/**
+ * Validate transaction hash
+ */
+export const isValidTransactionHash = (hash: string): boolean => {
+  return /^[a-f0-9]+$/i.test(hash) && hash.length > 0;
 };
