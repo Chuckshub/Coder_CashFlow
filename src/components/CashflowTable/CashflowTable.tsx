@@ -10,6 +10,7 @@ interface CashflowTableProps {
   onAddEstimate: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateEstimate: (id: string, estimate: Partial<Estimate>) => void;
   onDeleteEstimate: (id: string) => void;
+  onEstimateClick?: (estimateId: string) => void; // Optional click handler to show creator info
 }
 
 interface ModalState {
@@ -19,12 +20,13 @@ interface ModalState {
   editingEstimate?: Estimate;
 }
 
-const CashflowTable: React.FC<CashflowTableProps> = ({
-  weeklyCashflows,
-  transactions,
-  onAddEstimate,
-  onUpdateEstimate,
-  onDeleteEstimate
+const CashflowTable: React.FC<CashflowTableProps> = ({ 
+  weeklyCashflows, 
+  transactions, 
+  onAddEstimate, 
+  onUpdateEstimate, 
+  onDeleteEstimate,
+  onEstimateClick
 }) => {
   const [modalState, setModalState] = useState<ModalState>({
     isOpen: false,
@@ -65,7 +67,8 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
     weekNumber: number; 
     type: 'inflow' | 'outflow';
     estimates: Estimate[];
-  }> = ({ value, weekNumber, type, estimates }) => {
+    onEstimateClick?: (estimateId: string) => void;
+  }> = ({ value, weekNumber, type, estimates, onEstimateClick }) => {
     const cellEstimates = estimates.filter(e => e.type === type);
     const hasEstimates = cellEstimates.length > 0;
     const estimateTotal = cellEstimates.reduce((sum, e) => sum + e.amount, 0);
@@ -87,18 +90,38 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
         {cellEstimates.map((estimate) => (
           <div
             key={estimate.id}
-            className="text-xs bg-blue-50 rounded px-2 py-1 mb-1 truncate hover:bg-blue-100 transition-colors"
+            className="text-xs bg-blue-50 rounded px-2 py-1 mb-1 truncate hover:bg-blue-100 transition-colors relative"
             title={`${estimate.description} - ${estimate.notes || ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              openEstimateModal(weekNumber, type, estimate);
-            }}
           >
             <div className="text-blue-600 font-medium">
               {formatCurrency(estimate.amount)}
             </div>
             <div className="text-blue-500 text-xs truncate">
               {estimate.description}
+            </div>
+            
+            {/* Click handlers */}
+            <div className="absolute inset-0 flex">
+              {/* Left half - Show creator info */}
+              {onEstimateClick && (
+                <button
+                  className="flex-1 hover:bg-blue-200 hover:bg-opacity-30 rounded-l transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEstimateClick(estimate.id);
+                  }}
+                  title="Click to see who created this estimate"
+                />
+              )}
+              {/* Right half - Edit estimate */}
+              <button
+                className="flex-1 hover:bg-yellow-200 hover:bg-opacity-30 rounded-r transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openEstimateModal(weekNumber, type, estimate);
+                }}
+                title="Click to edit this estimate"
+              />
             </div>
           </div>
         ))}
@@ -192,6 +215,7 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
                       weekNumber={weekData.weekNumber}
                       type="inflow"
                       estimates={weekData.estimates}
+                      onEstimateClick={onEstimateClick}
                     />
                   </td>
                   
@@ -201,6 +225,7 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
                       weekNumber={weekData.weekNumber}
                       type="outflow"
                       estimates={weekData.estimates}
+                      onEstimateClick={onEstimateClick}
                     />
                   </td>
                   

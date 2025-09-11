@@ -4,6 +4,7 @@ import ProtectedRoute from './components/Auth/ProtectedRoute';
 import UserHeader from './components/common/UserHeader';
 import CSVUpload from './components/DataImport/CSVUpload';
 import FirebaseStatus from './components/common/FirebaseStatus';
+import EstimateCreatorModal from './components/common/EstimateCreatorModal';
 import CashflowTable from './components/CashflowTable/CashflowTable';
 import { Transaction, Estimate, WeeklyCashflow, RawTransaction } from './types';
 import { formatCurrency, generate13Weeks } from './utils/dateUtils';
@@ -15,6 +16,7 @@ import {
 } from './services/csvToFirebasePipelineSimple';
 import { getSimpleDataLoader, DataLoadingState } from './services/dataLoaderSimple';
 import { testFirebaseConnection } from './utils/firebaseTest';
+import { getSimpleFirebaseService } from './services/firebaseServiceSimple';
 
 type ActiveView = 'upload' | 'cashflow';
 
@@ -128,6 +130,12 @@ function DatabaseApp() {
     hasData: false
   });
 
+  // Modal state for estimate creator information
+  const [estimateModalState, setEstimateModalState] = useState<{
+    isOpen: boolean;
+    estimateId: string;
+  }>({ isOpen: false, estimateId: '' });
+
   // Load transactions using the new data loader
   const loadTransactionsFromDatabase = useCallback(async () => {
     if (!currentUser?.uid) return;
@@ -157,6 +165,23 @@ function DatabaseApp() {
     }
   }, [currentUser?.uid]);
 
+  // Load estimates from Firebase
+  const loadEstimatesFromDatabase = useCallback(async () => {
+    if (!currentUser?.uid) return;
+    
+    console.log('📥 Loading estimates from Firebase...');
+    
+    try {
+      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      const loadedEstimates = await firebaseService.loadEstimates();
+      setEstimates(loadedEstimates);
+      console.log('✅ Loaded', loadedEstimates.length, 'estimates from Firebase');
+    } catch (error: any) {
+      console.error('💥 Error loading estimates:', error);
+      setError(`Failed to load estimates: ${error.message}`);
+    }
+  }, [currentUser?.uid]);
+
   // Set up real-time transaction subscription
   useEffect(() => {
     if (!currentUser?.uid) return;
@@ -180,11 +205,14 @@ function DatabaseApp() {
     // Initial load
     loadTransactionsFromDatabase();
     
+    // Also load estimates
+    loadEstimatesFromDatabase();
+    
     return () => {
       console.log('🗏 Cleaning up transaction subscription');
       unsubscribe();
     };
-  }, [currentUser?.uid, loadTransactionsFromDatabase]);
+  }, [currentUser?.uid, loadTransactionsFromDatabase, loadEstimatesFromDatabase]);
 
   // Calculate weekly cashflows when data changes
   const weeklyCashflows = React.useMemo(() => {
@@ -259,29 +287,115 @@ function DatabaseApp() {
     setUploadProgress(null);
   }, []);
 
-  // Add estimate
+  // Add estimate with Firebase and user tracking
   const addEstimate = useCallback(async (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (!currentUser?.uid) {
+      setError('User not authenticated');
+      return;
+    }
+
     const newEstimate: Estimate = {
       ...estimate,
       id: uuidv4(),
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    setEstimates(prev => [...prev, newEstimate]);
-  }, []);
 
-  // Update estimate
+    try {
+      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      const result = await firebaseService.saveEstimate(
+        newEstimate, 
+        currentUser.displayName || '', 
+        currentUser.email || ''
+      );
+      
+      if (result.success) {
+        console.log('✅ Estimate saved to Firebase:', newEstimate.id);
+        // Reload estimates to get updated list
+        await loadEstimatesFromDatabase();
+      } else {
+        setError(result.error || 'Failed to save estimate');
+      }
+    } catch (error: any) {
+      console.error('💥 Error adding estimate:', error);
+      setError(`Failed to add estimate: ${error.message}`);
+    }
+  }, [currentUser?.uid, currentUser?.displayName, currentUser?.email, loadEstimatesFromDatabase]);
+
+  // Update estimate with Firebase
   const updateEstimate = useCallback(async (id: string, updates: Partial<Estimate>) => {
-    setEstimates(prev => prev.map(estimate => 
-      estimate.id === id 
-        ? { ...estimate, ...updates, updatedAt: new Date() }
-        : estimate
-    ));
+    if (!currentUser?.uid) {
+      setError('User not authenticated');
+      return;
+    }
+
+    try {
+      // Find the existing estimate
+      const existingEstimate = estimates.find(e => e.id === id);
+      if (!existingEstimate) {
+        setError('Estimate not found');
+        return;
+      }
+
+      const updatedEstimate: Estimate = {
+        ...existingEstimate,
+        ...updates,
+        updatedAt: new Date()
+      };
+
+      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      const result = await firebaseService.saveEstimate(
+        updatedEstimate,
+        currentUser.displayName || '',
+        currentUser.email || ''
+      );
+      
+      if (result.success) {
+        console.log('✅ Estimate updated in Firebase:', id);
+        // Reload estimates to get updated list
+        await loadEstimatesFromDatabase();
+      } else {
+        setError(result.error || 'Failed to update estimate');
+      }
+    } catch (error: any) {
+      console.error('💥 Error updating estimate:', error);
+      setError(`Failed to update estimate: ${error.message}`);
+    }
+  }, [currentUser?.uid, currentUser?.displayName, currentUser?.email, estimates, loadEstimatesFromDatabase]);
+
+  // Delete estimate from Firebase
+  const deleteEstimate = useCallback(async (id: string) => {
+    if (!currentUser?.uid) {
+      setError('User not authenticated');
+      return;
+    }
+
+    try {
+      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      const result = await firebaseService.deleteEstimate(id);
+      
+      if (result.success) {
+        console.log('✅ Estimate deleted from Firebase:', id);
+        // Reload estimates to get updated list
+        await loadEstimatesFromDatabase();
+      } else {
+        setError(result.error || 'Failed to delete estimate');
+      }
+    } catch (error: any) {
+      console.error('💥 Error deleting estimate:', error);
+      setError(`Failed to delete estimate: ${error.message}`);
+    }
+  }, [currentUser?.uid, loadEstimatesFromDatabase]);
+
+  // Handle estimate click to show creator info
+  const handleEstimateClick = useCallback((estimateId: string) => {
+    console.log('🔍 Opening estimate creator modal for:', estimateId);
+    setEstimateModalState({ isOpen: true, estimateId });
   }, []);
 
-  // Delete estimate
-  const deleteEstimate = useCallback(async (id: string) => {
-    setEstimates(prev => prev.filter(estimate => estimate.id !== id));
+  // Close estimate modal
+  const closeEstimateModal = useCallback(() => {
+    setEstimateModalState({ isOpen: false, estimateId: '' });
   }, []);
 
   // Clear error
@@ -522,6 +636,7 @@ function DatabaseApp() {
                 onAddEstimate={addEstimate}
                 onUpdateEstimate={updateEstimate}
                 onDeleteEstimate={deleteEstimate}
+                onEstimateClick={handleEstimateClick}
               />
             ) : (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
@@ -545,6 +660,14 @@ function DatabaseApp() {
           </div>
         )}
       </div>
+
+      {/* Estimate Creator Modal */}
+      <EstimateCreatorModal
+        isOpen={estimateModalState.isOpen}
+        onClose={closeEstimateModal}
+        estimateId={estimateModalState.estimateId}
+        userId={currentUser?.uid || ''}
+      />
     </div>
   );
 }

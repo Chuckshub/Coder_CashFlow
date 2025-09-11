@@ -3,12 +3,13 @@ import {
   doc,
   getDocs,
   setDoc,
+  deleteDoc,
   writeBatch,
   onSnapshot,
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Transaction, RawTransaction } from '../types';
+import { Transaction, RawTransaction, Estimate } from '../types';
 
 // ============================================================================
 // SIMPLIFIED FIREBASE ARCHITECTURE
@@ -18,11 +19,12 @@ import { Transaction, RawTransaction } from '../types';
  * Collection Structure (MUCH SIMPLER!):
  * 
  * /users/{userId}/transactions/{transactionHash}
+ * /users/{userId}/estimates/{estimateId}
  * 
- * That's it! No sessions, no complexity, just:
+ * Simple, clean, and efficient:
  * - User isolation
- * - Hash-based duplicate prevention
- * - Direct transaction storage
+ * - Hash-based duplicate prevention for transactions
+ * - Direct estimate storage with user tracking
  */
 
 // ============================================================================
@@ -45,6 +47,23 @@ export interface FirebaseTransaction {
   updatedAt: Timestamp;
 }
 
+export interface FirebaseEstimate {
+  id: string;
+  userId: string;
+  amount: number;
+  type: 'inflow' | 'outflow';
+  category: string;
+  description: string;
+  notes?: string;
+  weekNumber: number;
+  isRecurring: boolean;
+  recurringType?: 'weekly' | 'bi-weekly' | 'monthly';
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  createdBy: string; // User email or display name
+  createdByUserId: string; // User ID for security
+}
+
 // ============================================================================
 // SIMPLIFIED FIREBASE SERVICE
 // ============================================================================
@@ -58,6 +77,10 @@ export class SimpleFirebaseService {
 
   private getCollectionPath(): string {
     return `users/${this.userId}/transactions`;
+  }
+
+  private getEstimatesCollectionPath(): string {
+    return `users/${this.userId}/estimates`;
   }
 
   /**
@@ -325,6 +348,259 @@ export class SimpleFirebaseService {
       totalOutflow,
       netCashflow: totalInflow - totalOutflow
     };
+  }
+
+  // ============================================================================
+  // ESTIMATE MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Save an estimate with user tracking
+   */
+  async saveEstimate(estimate: Estimate, userDisplayName: string, userEmail: string): Promise<{ success: boolean; error?: string }> {
+    console.log('💾 Saving estimate...', estimate.id, estimate.description);
+    
+    if (!db) {
+      return { success: false, error: 'Firebase not initialized' };
+    }
+
+    try {
+      const collectionRef = collection(db, this.getEstimatesCollectionPath());
+      const docRef = doc(collectionRef, estimate.id);
+      
+      const firebaseEstimate: FirebaseEstimate = {
+        id: estimate.id,
+        userId: this.userId,
+        amount: estimate.amount,
+        type: estimate.type,
+        category: estimate.category,
+        description: estimate.description,
+        notes: estimate.notes,
+        weekNumber: estimate.weekNumber,
+        isRecurring: estimate.isRecurring,
+        recurringType: estimate.recurringType,
+        createdAt: estimate.createdAt ? Timestamp.fromDate(estimate.createdAt) : Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        createdBy: userDisplayName || userEmail || 'Unknown User',
+        createdByUserId: this.userId
+      };
+      
+      await setDoc(docRef, firebaseEstimate);
+      console.log('✅ Estimate saved successfully:', estimate.id);
+      
+      return { success: true };
+      
+    } catch (error) {
+      const errorMsg = `Failed to save estimate: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error('💥 Error saving estimate:', error);
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  /**
+   * Load all estimates for the user
+   */
+  async loadEstimates(): Promise<Estimate[]> {
+    console.log('📥 Loading estimates from Firebase...');
+    console.log('🔑 User ID:', this.userId);
+    console.log('📁 Estimates collection path:', this.getEstimatesCollectionPath());
+    
+    if (!db) {
+      console.error('Firebase not initialized');
+      return [];
+    }
+
+    try {
+      const collectionRef = collection(db, this.getEstimatesCollectionPath());
+      const snapshot = await getDocs(collectionRef);
+      
+      console.log('📊 Found', snapshot.size, 'estimate documents');
+      
+      const estimates: Estimate[] = [];
+      
+      snapshot.forEach(doc => {
+        const data = doc.data() as FirebaseEstimate;
+        console.log('📄 Processing estimate doc:', doc.id, 'with data:', {
+          description: data.description,
+          amount: data.amount,
+          weekNumber: data.weekNumber,
+          createdBy: data.createdBy
+        });
+        
+        try {
+          const estimate: Estimate = {
+            id: data.id,
+            amount: data.amount,
+            type: data.type,
+            category: data.category,
+            description: data.description,
+            notes: data.notes,
+            weekNumber: data.weekNumber,
+            isRecurring: data.isRecurring,
+            recurringType: data.recurringType,
+            createdAt: data.createdAt.toDate(),
+            updatedAt: data.updatedAt.toDate()
+          };
+          
+          estimates.push(estimate);
+        } catch (error) {
+          console.error('Error converting estimate:', doc.id, error);
+        }
+      });
+      
+      // Sort by creation date (newest first)
+      estimates.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      
+      console.log('✅ Loaded', estimates.length, 'estimates');
+      return estimates;
+      
+    } catch (error) {
+      console.error('💥 Error loading estimates:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Delete an estimate
+   */
+  async deleteEstimate(estimateId: string): Promise<{ success: boolean; error?: string }> {
+    console.log('🗑️ Deleting estimate:', estimateId);
+    
+    if (!db) {
+      return { success: false, error: 'Firebase not initialized' };
+    }
+
+    try {
+      const docRef = doc(db, this.getEstimatesCollectionPath(), estimateId);
+      await deleteDoc(docRef);
+      
+      console.log('✅ Estimate deleted successfully:', estimateId);
+      return { success: true };
+      
+    } catch (error) {
+      const errorMsg = `Failed to delete estimate: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error('💥 Error deleting estimate:', error);
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  /**
+   * Get estimate with creator information
+   */
+  async getEstimateWithCreator(estimateId: string): Promise<(Estimate & { createdBy: string; createdByUserId: string }) | null> {
+    console.log('🔍 Getting estimate with creator info:', estimateId);
+    
+    if (!db) {
+      console.error('Firebase not initialized');
+      return null;
+    }
+
+    try {
+      const collectionRef = collection(db, this.getEstimatesCollectionPath());
+      const docSnap = await getDocs(collectionRef);
+      
+      let foundEstimate: (Estimate & { createdBy: string; createdByUserId: string }) | null = null;
+      
+      docSnap.forEach(doc => {
+        if (doc.id === estimateId) {
+          const data = doc.data() as FirebaseEstimate;
+          const estimateWithCreator: Estimate & { createdBy: string; createdByUserId: string } = {
+            id: data.id,
+            amount: data.amount,
+            type: data.type,
+            category: data.category,
+            description: data.description,
+            notes: data.notes,
+            weekNumber: data.weekNumber,
+            isRecurring: data.isRecurring,
+            recurringType: data.recurringType,
+            createdAt: data.createdAt.toDate(),
+            updatedAt: data.updatedAt.toDate(),
+            createdBy: data.createdBy,
+            createdByUserId: data.createdByUserId
+          };
+          foundEstimate = estimateWithCreator;
+        }
+      });
+      
+      console.log('✅ Retrieved estimate with creator info');
+      return foundEstimate;
+      
+    } catch (error) {
+      console.error('💥 Error getting estimate with creator:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Real-time listener for estimates
+   */
+  subscribeToEstimates(callback: (estimates: Estimate[]) => void): () => void {
+    console.log('👂 Setting up real-time estimate listener...');
+    
+    const collectionRef = collection(db, this.getEstimatesCollectionPath());
+    
+    return onSnapshot(collectionRef, (snapshot) => {
+      console.log('🔄 Real-time estimate update - found', snapshot.size, 'documents');
+      
+      const estimates: Estimate[] = [];
+      
+      snapshot.forEach(doc => {
+        const data = doc.data() as FirebaseEstimate;
+        
+        try {
+          const estimate: Estimate = {
+            id: data.id,
+            amount: data.amount,
+            type: data.type,
+            category: data.category,
+            description: data.description,
+            notes: data.notes,
+            weekNumber: data.weekNumber,
+            isRecurring: data.isRecurring,
+            recurringType: data.recurringType,
+            createdAt: data.createdAt.toDate(),
+            updatedAt: data.updatedAt.toDate()
+          };
+          
+          estimates.push(estimate);
+        } catch (error) {
+          console.error('Error converting estimate in listener:', doc.id, error);
+        }
+      });
+      
+      // Sort by creation date (newest first)
+      estimates.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      
+      console.log('🔄 Real-time estimate update complete:', estimates.length, 'estimates');
+      callback(estimates);
+    }, (error) => {
+      console.error('Real-time estimate listener error:', error);
+    });
+  }
+
+  /**
+   * Clear all estimates (for testing/reset)
+   */
+  async clearAllEstimates(): Promise<void> {
+    console.log('🗑️ Clearing all estimates...');
+    
+    try {
+      const collectionRef = collection(db, this.getEstimatesCollectionPath());
+      const snapshot = await getDocs(collectionRef);
+      
+      const batch = writeBatch(db);
+      
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      await batch.commit();
+      console.log('✅ All estimates cleared');
+    } catch (error) {
+      console.error('Error clearing estimates:', error);
+      throw error;
+    }
   }
 }
 
