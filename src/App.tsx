@@ -35,7 +35,7 @@ function calculateWeeklyCashflows(
     let runningBalance = startingBalance;
 
     return weekDates.map((weekStartDate, index) => {
-      const weekNumber = index + 1;
+      const weekNumber = index - 1; // Week -1, 0, 1, 2, ..., 12
       
       // Calculate week end date (6 days after start)
       const weekEndDate = new Date(weekStartDate);

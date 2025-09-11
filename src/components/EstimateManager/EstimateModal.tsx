@@ -9,6 +9,8 @@ interface EstimateModalProps {
   weekNumber: number;
   type: 'inflow' | 'outflow' | null;
   estimate?: Estimate;
+  isPastWeek?: boolean; // New prop to indicate if this is a past week
+  onSaveActualTransaction?: (transaction: any) => void; // New prop for saving actual transactions
 }
 
 const commonCategories = {
@@ -38,7 +40,9 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
   onDelete,
   weekNumber,
   type,
-  estimate
+  estimate,
+  isPastWeek,
+  onSaveActualTransaction
 }) => {
   const [formData, setFormData] = useState({
     amount: '',
@@ -50,6 +54,7 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isActualTransaction, setIsActualTransaction] = useState(false); // Toggle for actual vs estimate
 
   useEffect(() => {
     if (estimate) {
@@ -99,6 +104,24 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
       return;
     }
 
+    if (isPastWeek && isActualTransaction && onSaveActualTransaction) {
+      // Handle actual transaction for past weeks
+      const transactionData = {
+        amount: parseFloat(formData.amount),
+        type,
+        category: formData.category.trim(),
+        description: formData.description.trim(),
+        notes: formData.notes.trim() || undefined,
+        weekNumber,
+        date: new Date() // For now, use current date - could be made more specific
+      };
+      
+      console.log('💰 Creating actual transaction data:', transactionData);
+      onSaveActualTransaction(transactionData);
+      return;
+    }
+
+    // Handle estimate (existing logic)
     const estimateData: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'> = {
       amount: parseFloat(formData.amount),
       type, // TypeScript now knows this is not null
@@ -135,6 +158,14 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
     handleSave();
   };
 
+  const handleDelete = () => {
+    if (onDelete && estimate) {
+      console.log('🗑️ Deleting estimate:', estimate.id);
+      onDelete();
+      onClose();
+    }
+  };
+
   const handleCategorySelect = (category: string) => {
     setFormData(prev => ({ ...prev, category }));
   };
@@ -163,8 +194,49 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
 
           <div className="mb-4">
             <div className="text-sm text-gray-600 mb-2">
-              Week {weekNumber} • {type === 'inflow' ? 'Income' : 'Expense'}
+              {weekNumber === -1 ? 'Last Week' : 
+               weekNumber === 0 ? 'Current Week' : 
+               weekNumber > 0 ? `Week +${weekNumber}` : 
+               `Week ${weekNumber}`} • {type === 'inflow' ? 'Income' : 'Expense'}
             </div>
+            
+            {/* Toggle for past weeks between estimate and actual */}
+            {isPastWeek && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                <div className="text-sm font-medium text-amber-800 mb-2">Data Type</div>
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="dataType"
+                      checked={!isActualTransaction}
+                      onChange={() => setIsActualTransaction(false)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-amber-700">
+                      📊 Estimate (projected)
+                    </span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="dataType"
+                      checked={isActualTransaction}
+                      onChange={() => setIsActualTransaction(true)}
+                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-amber-700">
+                      💰 Actual (completed transaction)
+                    </span>
+                  </label>
+                </div>
+                <div className="text-xs text-amber-600 mt-1">
+                  {isActualTransaction 
+                    ? 'This will be added as a completed transaction to your records' 
+                    : 'This will be saved as an estimate for planning purposes'}
+                </div>
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -264,35 +336,37 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
               />
             </div>
 
-            {/* Recurring options */}
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.isRecurring}
-                  onChange={(e) => setFormData(prev => ({ ...prev, isRecurring: e.target.checked }))}
-                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                />
-                <span className="ml-2 text-sm text-gray-700">Recurring estimate</span>
-              </label>
-              
-              {formData.isRecurring && (
-                <div className="mt-2 ml-6">
-                  <select
-                    value={formData.recurringType}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      recurringType: e.target.value as 'weekly' | 'bi-weekly' | 'monthly'
-                    }))}
-                    className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="weekly">Weekly</option>
-                    <option value="bi-weekly">Bi-weekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
-                </div>
-              )}
-            </div>
+            {/* Recurring Options - only show for estimates */}
+            {!isActualTransaction && (
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.isRecurring}
+                    onChange={(e) => setFormData(prev => ({ ...prev, isRecurring: e.target.checked }))}
+                    className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Recurring estimate</span>
+                </label>
+                
+                {formData.isRecurring && (
+                  <div className="mt-2 ml-6">
+                    <select
+                      value={formData.recurringType}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        recurringType: e.target.value as 'weekly' | 'bi-weekly' | 'monthly'
+                      }))}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    >
+                      <option value="weekly">Weekly</option>
+                      <option value="bi-weekly">Bi-weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Action buttons */}
             <div className="flex justify-between pt-4">
@@ -300,7 +374,7 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
                 {estimate && onDelete && (
                   <button
                     type="button"
-                    onClick={onDelete}
+                    onClick={handleDelete}
                     className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors"
                   >
                     Delete
@@ -320,7 +394,7 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
                   type="submit"
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 >
-                  {estimate ? 'Update' : 'Add'} Estimate
+                  {estimate ? 'Update' : 'Add'} {isPastWeek && isActualTransaction ? 'Transaction' : 'Estimate'}
                 </button>
               </div>
             </div>

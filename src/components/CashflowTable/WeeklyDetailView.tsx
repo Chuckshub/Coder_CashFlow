@@ -24,19 +24,31 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
   onClose,
   onRefreshData
 }) => {
-  // Use the first available week instead of hardcoding Week 0
-  const firstAvailableWeek = weeklyCashflows.length > 0 ? weeklyCashflows[0].weekNumber : 0;
-  const [selectedWeek, setSelectedWeek] = useState(firstAvailableWeek);
+  // Default to week 0 (current week) instead of first available week
+  const [selectedWeek, setSelectedWeek] = useState(0);
   const [activeTab, setActiveTab] = useState<'inflow' | 'outflow'>('inflow');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showRefreshSuccess, setShowRefreshSuccess] = useState(false);
 
-  // Update selected week if the first available week changes
+  // Helper function to format week display names
+  const getWeekDisplayName = (weekNumber: number): string => {
+    if (weekNumber === -1) return 'Last Week';
+    if (weekNumber === 0) return 'Current Week';
+    if (weekNumber > 0) return `Week +${weekNumber}`;
+    return `Week ${weekNumber}`;
+  };
+
+  // Update selected week if week 0 doesn't exist, fall back to first available
   React.useEffect(() => {
     if (weeklyCashflows.length > 0 && !weeklyCashflows.find(w => w.weekNumber === selectedWeek)) {
-      const newFirstWeek = weeklyCashflows[0].weekNumber;
-      console.log('📊 WeeklyDetailView - Updating selected week from', selectedWeek, 'to', newFirstWeek);
-      setSelectedWeek(newFirstWeek);
+      const hasWeekZero = weeklyCashflows.find(w => w.weekNumber === 0);
+      if (hasWeekZero) {
+        setSelectedWeek(0);
+      } else {
+        const newFirstWeek = weeklyCashflows[0].weekNumber;
+        console.log('📊 WeeklyDetailView - Week 0 not found, using first available week:', newFirstWeek);
+        setSelectedWeek(newFirstWeek);
+      }
     }
   }, [weeklyCashflows, selectedWeek]);
 
@@ -109,7 +121,7 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
                   onClick={() => setSelectedWeek(weeklyCashflows[0].weekNumber)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors mr-2"
                 >
-                  Go to Week {weeklyCashflows[0].weekNumber}
+                  Go to {getWeekDisplayName(weeklyCashflows[0].weekNumber)}
                 </button>
               )}
               <button
@@ -340,7 +352,7 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
                     : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                <div className="font-medium">Week {week.weekNumber}</div>
+                <div className="font-medium">{getWeekDisplayName(week.weekNumber)}</div>
                 <div className="text-xs">
                   {formatWeekRange(week.weekStart)}
                 </div>
@@ -485,7 +497,7 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
         <div className="p-4 border-t border-gray-200 bg-gray-50">
           <div className="flex justify-between items-center text-sm text-gray-600">
             <div>
-              Showing detailed breakdown for Week {selectedWeek} • {formatWeekRange(selectedWeekData.weekStart)}
+              Showing detailed breakdown for {getWeekDisplayName(selectedWeek)} • {formatWeekRange(selectedWeekData.weekStart)}
             </div>
             <button
               onClick={onClose}

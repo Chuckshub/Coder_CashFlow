@@ -25,11 +25,15 @@ export const formatWeekRange = (weekStart: Date): string => {
 
 export const generate13Weeks = (startDate: Date = new Date()): Date[] => {
   const weeks: Date[] = [];
-  let currentWeek = getWeekStart(startDate);
+  const currentWeekStart = getWeekStart(startDate);
   
-  for (let i = 0; i < 13; i++) {
-    weeks.push(new Date(currentWeek));
-    currentWeek = addWeeks(currentWeek, 1);
+  // Start from one week before current week (week -1)
+  let weekDate = addWeeks(currentWeekStart, -1);
+  
+  // Generate 14 weeks total: week -1, week 0 (current), weeks 1-12
+  for (let i = 0; i < 14; i++) {
+    weeks.push(new Date(weekDate));
+    weekDate = addWeeks(weekDate, 1);
   }
   
   return weeks;

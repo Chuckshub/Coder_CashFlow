@@ -19,6 +19,7 @@ interface ModalState {
   weekNumber: number;
   type: 'inflow' | 'outflow' | null;
   editingEstimate?: Estimate;
+  isActualTransaction?: boolean; // New field to distinguish actual transactions from estimates
 }
 
 const CashflowTable: React.FC<CashflowTableProps> = ({ 
@@ -38,11 +39,14 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
   const [showDetailView, setShowDetailView] = useState(false);
 
   const openEstimateModal = (weekNumber: number, type: 'inflow' | 'outflow', estimate?: Estimate) => {
+    console.log('💼 Opening modal for week', weekNumber, 'type', type, estimate ? 'editing' : 'creating');
+    
     setModalState({
       isOpen: true,
       weekNumber,
       type,
-      editingEstimate: estimate
+      editingEstimate: estimate,
+      isActualTransaction: false // Default to estimate, user can change in modal if it's a past week
     });
   };
 
@@ -291,6 +295,12 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
         weekNumber={modalState.weekNumber}
         type={modalState.type}
         estimate={modalState.editingEstimate}
+        isPastWeek={modalState.weekNumber < 0}
+        onSaveActualTransaction={(transaction) => {
+          console.log('💰 Saving actual transaction:', transaction);
+          // TODO: Implement actual transaction saving
+          closeModal();
+        }}
         onDelete={modalState.editingEstimate ? () => {
           onDeleteEstimate(modalState.editingEstimate!.id);
           closeModal();
