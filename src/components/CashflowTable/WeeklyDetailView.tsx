@@ -24,10 +24,21 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
   onClose,
   onRefreshData
 }) => {
-  const [selectedWeek, setSelectedWeek] = useState(0); // Start with Week 0 (current week)
+  // Use the first available week instead of hardcoding Week 0
+  const firstAvailableWeek = weeklyCashflows.length > 0 ? weeklyCashflows[0].weekNumber : 0;
+  const [selectedWeek, setSelectedWeek] = useState(firstAvailableWeek);
   const [activeTab, setActiveTab] = useState<'inflow' | 'outflow'>('inflow');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showRefreshSuccess, setShowRefreshSuccess] = useState(false);
+
+  // Update selected week if the first available week changes
+  React.useEffect(() => {
+    if (weeklyCashflows.length > 0 && !weeklyCashflows.find(w => w.weekNumber === selectedWeek)) {
+      const newFirstWeek = weeklyCashflows[0].weekNumber;
+      console.log('📊 WeeklyDetailView - Updating selected week from', selectedWeek, 'to', newFirstWeek);
+      setSelectedWeek(newFirstWeek);
+    }
+  }, [weeklyCashflows, selectedWeek]);
 
   // Handle refresh with loading state
   const handleRefresh = async () => {
@@ -59,11 +70,14 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
   
   if (!selectedWeekData) {
     console.error('❌ WeeklyDetailView - selectedWeekData not found for week:', selectedWeek);
+    const availableWeeks = weeklyCashflows.map(w => w.weekNumber).join(', ') || 'none';
+    console.log('📊 Available weeks:', availableWeeks);
+    
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-screen overflow-y-auto">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-screen overflow-y-auto">
           <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-900">Weekly Detail View</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Weekly Detail View</h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -75,14 +89,32 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
           </div>
           <div className="px-6 py-8">
             <div className="text-center">
-              <div className="text-red-500 text-4xl mb-4">⚠️</div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Week Data Found</h3>
+              <div className="text-orange-500 text-4xl mb-4">🔍</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Week Data Mismatch</h3>
               <p className="text-gray-600 mb-4">
-                Could not find data for week {selectedWeek}. Available weeks: {weeklyCashflows.map(w => w.weekNumber).join(', ') || 'none'}
+                Looking for week {selectedWeek}, but only found weeks: {availableWeeks}
               </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="text-sm text-blue-800">
+                  <strong>This usually means:</strong>
+                  <ul className="mt-2 text-left space-y-1">
+                    <li>• Your cashflow starts from Week 1, not Week 0</li>
+                    <li>• Week numbering changed after data refresh</li>
+                    <li>• Date range calculation issue</li>
+                  </ul>
+                </div>
+              </div>
+              {weeklyCashflows.length > 0 && (
+                <button
+                  onClick={() => setSelectedWeek(weeklyCashflows[0].weekNumber)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors mr-2"
+                >
+                  Go to Week {weeklyCashflows[0].weekNumber}
+                </button>
+              )}
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
               >
                 Close
               </button>
