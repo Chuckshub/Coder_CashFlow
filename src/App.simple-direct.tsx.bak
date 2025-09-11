@@ -1,88 +1,17 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import UserHeader from './components/common/UserHeader';
 import CSVUpload from './components/DataImport/CSVUpload';
 import CashflowTable from './components/CashflowTable/CashflowTable';
-import { RawTransaction, Transaction, Estimate, WeeklyCashflow } from './types';
+import { RawTransaction, Transaction, Estimate } from './types';
 import { convertToTransaction } from './utils/csvParser';
 import { categorizeTransactions } from './utils/transactionCategorizer';
-import { formatCurrency, generate13Weeks } from './utils/dateUtils';
-import { v4 as uuidv4 } from 'uuid';
+import { calculateRollingCashflows } from './utils/rollingTimeline';
+import { createTransactionHashFromRaw, filterDuplicateTransactions } from './utils/transactionHash';
+import { formatCurrency } from './utils/dateUtils';
 
 type ActiveView = 'upload' | 'cashflow';
-
-// Simple weekly cashflow calculation for direct mode
-function calculateSimpleWeeklyCashflows(
-  transactions: Transaction[],
-  estimates: Estimate[],
-  startingBalance: number
-): WeeklyCashflow[] {
-  const weeks = generate13Weeks();
-  const weeklyCashflows: WeeklyCashflow[] = [];
-  let runningBalance = startingBalance;
-  
-  weeks.forEach((weekStart, index) => {
-    const weekNumber = index + 1;
-    
-    // For simplicity, just distribute transactions evenly across weeks
-    // In a full implementation, you'd filter by actual week dates
-    const weeklyTransactions = transactions.slice(index * Math.floor(transactions.length / 13), (index + 1) * Math.floor(transactions.length / 13));
-    
-    const actualInflow = weeklyTransactions
-      .filter(t => t.type === 'inflow')
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    const actualOutflow = weeklyTransactions
-      .filter(t => t.type === 'outflow')
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    // Get estimates for this week
-    const weekEstimates = estimates.filter(e => e.weekNumber === weekNumber);
-    
-    const estimatedInflow = weekEstimates
-      .filter(e => e.type === 'inflow')
-      .reduce((sum, e) => sum + e.amount, 0);
-    
-    const estimatedOutflow = weekEstimates
-      .filter(e => e.type === 'outflow')
-      .reduce((sum, e) => sum + e.amount, 0);
-    
-    const netCashflow = (actualInflow + estimatedInflow) - (actualOutflow + estimatedOutflow);
-    runningBalance += netCashflow;
-    
-    const totalInflow = actualInflow + estimatedInflow;
-    const totalOutflow = actualOutflow + estimatedOutflow;
-    
-    // Determine week status (simplified)
-    const now = new Date();
-    let weekStatus: 'past' | 'current' | 'future' = 'future';
-    if (weekStart <= now && now <= new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000)) {
-      weekStatus = 'current';
-    } else if (weekStart < now) {
-      weekStatus = 'past';
-    }
-    
-    weeklyCashflows.push({
-      weekNumber,
-      weekStart,
-      weekEnd: new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000), // Add 6 days
-      weekStatus,
-      actualInflow,
-      actualOutflow,
-      estimatedInflow,
-      estimatedOutflow,
-      totalInflow,
-      totalOutflow,
-      netCashflow,
-      runningBalance,
-      estimates: weekEstimates,
-      transactions: weeklyTransactions
-    });
-  });
-  
-  return weeklyCashflows;
-}
 
 function DirectApp() {
   const { currentUser } = useAuth();
@@ -93,7 +22,7 @@ function DirectApp() {
   const [error, setError] = useState<string | null>(null);
 
   // Calculate weekly cashflows
-  const weeklyCashflows: WeeklyCashflow[] = React.useMemo(() => {
+  const weeklyCashflows = React.useMemo(() => {
     if (transactions.length === 0) return [];
     
     try {
@@ -101,7 +30,7 @@ function DirectApp() {
         ? Math.max(...transactions.map(t => t.balance))
         : 0;
       
-      return calculateSimpleWeeklyCashflows(transactions, estimates, startingBalance);
+      return calculateRollingCashflows(transactions, estimates, startingBalance);
     } catch (error) {
       console.error('Error calculating weekly cashflows:', error);
       return [];
@@ -115,19 +44,23 @@ function DirectApp() {
     try {
       console.log('📊 Processing', rawTransactions.length, 'transactions');
       
-      // Convert to processed transactions
+      // Convert to processed transactions with hashing
       const processedTransactions = rawTransactions.map(raw => {
         const transaction = convertToTransaction(raw);
+        transaction.hash = createTransactionHashFromRaw(raw);
         return transaction;
       });
       
       // Categorize transactions
       const categorizedTransactions = categorizeTransactions(processedTransactions);
       
-      console.log(`✅ Processed ${categorizedTransactions.length} transactions`);
-      setTransactions(categorizedTransactions);
+      // For now, just keep unique transactions in memory (no duplicate checking against existing since we start fresh)
+      const uniqueTransactions = filterDuplicateTransactions(categorizedTransactions, []);
       
-      if (categorizedTransactions.length > 0) {
+      console.log(`✅ Processed ${uniqueTransactions.length} unique transactions`);
+      setTransactions(uniqueTransactions);
+      
+      if (uniqueTransactions.length > 0) {
         setActiveView('cashflow');
       }
     } catch (error: any) {
@@ -144,9 +77,10 @@ function DirectApp() {
   }, []);
 
   const addEstimate = useCallback(async (estimateData: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => {
+    // Simple local storage for now
     const newEstimate: Estimate = {
       ...estimateData,
-      id: uuidv4(),
+      id: Date.now().toString(),
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -183,9 +117,6 @@ function DirectApp() {
                 <span className="text-white font-bold text-lg">$</span>
               </div>
               <h1 className="text-2xl font-bold text-gray-900">Coder CashFlow</h1>
-              <div className="text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                Direct Data Mode (No Sessions)
-              </div>
             </div>
             
             <div className="flex items-center space-x-4">
@@ -252,7 +183,7 @@ function DirectApp() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900">Your Data (Direct Mode)</h3>
+                  <h3 className="text-lg font-medium text-gray-900">Your Data</h3>
                   <p className="text-sm text-gray-600">
                     Transactions: {transactions.length} • 
                     Estimates: {estimates.length} • 

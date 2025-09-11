@@ -1,22 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Estimate } from '../../types';
-import { formatRollingWeekRange } from '../../utils/rollingTimeline';
 
 interface EstimateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onDelete?: () => void;
-  weekDate: Date;
+  weekNumber: number;
   type: 'inflow' | 'outflow' | null;
   estimate?: Estimate;
-  scenario?: string;
 }
 
 const commonCategories = {
   inflow: [
     'Client Payment',
-    'Recurring Revenue',
+    'Recurring Revenue', 
     'Investment Income',
     'Expense Reimbursement',
     'Other Income'
@@ -26,7 +24,7 @@ const commonCategories = {
     'Vendor Payment',
     'Office Expenses',
     'Marketing',
-    'Software/Tools',
+    'Software/Tools', 
     'Travel',
     'Taxes',
     'Other Expenses'
@@ -38,10 +36,9 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
   onClose,
   onSave,
   onDelete,
-  weekDate,
+  weekNumber,
   type,
-  estimate,
-  scenario = 'base'
+  estimate
 }) => {
   const [formData, setFormData] = useState({
     amount: '',
@@ -107,8 +104,7 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
       category: formData.category.trim(),
       description: formData.description.trim(),
       notes: formData.notes.trim() || undefined,
-      weekDate,
-      scenario,
+      weekNumber,
       isRecurring: formData.isRecurring,
       recurringType: formData.isRecurring ? formData.recurringType : undefined
     };
@@ -144,7 +140,7 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
 
           <div className="mb-4">
             <div className="text-sm text-gray-600 mb-2">
-              {formatRollingWeekRange(weekDate)} • {type === 'inflow' ? 'Income' : 'Expense'}
+              Week {weekNumber} • {type === 'inflow' ? 'Income' : 'Expense'}
             </div>
           </div>
 

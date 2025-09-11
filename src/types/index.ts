@@ -68,8 +68,7 @@ export interface Estimate {
   category: string;
   description: string;
   notes?: string;
-  weekDate: Date; // Date of the week this estimate applies to
-  scenario: string; // Scenario identifier (e.g., 'base', 'optimistic', 'pessimistic')
+  weekNumber: number; // Week number this estimate applies to
   isRecurring: boolean;
   recurringType?: 'weekly' | 'bi-weekly' | 'monthly';
   createdAt: Date;
