@@ -188,72 +188,157 @@ export const saveTransactions = async (
   rawTransactions: RawTransaction[],
   userId: string
 ): Promise<{ saved: number; duplicates: number; errors: string[] }> => {
+  console.log('🔄 saveTransactions called with', rawTransactions.length, 'transactions for userId:', userId);
+  
   const results = {
     saved: 0,
     duplicates: 0,
     errors: [] as string[]
   };
-  
+
+  if (!db) {
+    const error = 'Firebase database not initialized';
+    console.error('❌', error);
+    results.errors.push(error);
+    return results;
+  }
+
+  if (!userId) {
+    const error = 'User ID is required';
+    console.error('❌', error);
+    results.errors.push(error);
+    return results;
+  }
+
+  if (rawTransactions.length === 0) {
+    console.log('⚠️ No transactions to save');
+    return results;
+  }
+
   try {
     console.log('🔄 Processing', rawTransactions.length, 'raw transactions');
     
-    // Convert raw transactions to processed transactions
-    const processedTransactions = rawTransactions.map(raw => {
-      const transaction = convertToTransaction(raw);
-      transaction.hash = createTransactionHashFromRaw(raw);
-      return transaction;
-    });
+    // Convert and categorize transactions
+    const processedTransactions = rawTransactions.map(convertToTransaction);
+    console.log('✅ Converted', processedTransactions.length, 'transactions');
     
-    // Categorize transactions
     const categorizedTransactions = categorizeTransactions(processedTransactions);
+    console.log('✅ Categorized', categorizedTransactions.length, 'transactions');
+
+    // Add hashes to transactions
+    const transactionsWithHashes = categorizedTransactions.map(transaction => ({
+      ...transaction,
+      hash: transaction.hash || createTransactionHashFromProcessed(transaction)
+    }));
+    console.log('✅ Added hashes to', transactionsWithHashes.length, 'transactions');
+
+    // Check for duplicates
+    const newHashes = transactionsWithHashes.map(t => t.hash!).filter(Boolean);
+    console.log('🔍 Checking', newHashes.length, 'hashes for duplicates');
     
-    // Get hashes of new transactions
-    const newHashes = categorizedTransactions.map(t => t.hash!).filter(Boolean);
-    
-    // Check which hashes already exist in database
     const existingHashes = await checkExistingTransactions(newHashes, userId);
-    
+    console.log('✅ Duplicate check completed, found', existingHashes.size, 'existing hashes');
+
     // Filter out duplicates
-    const uniqueTransactions = categorizedTransactions.filter(transaction => {
-      if (!transaction.hash) return true; // Process transactions without hash
-      return !existingHashes.has(transaction.hash);
+    const uniqueTransactions = transactionsWithHashes.filter(transaction => {
+      if (!transaction.hash) {
+        console.warn('⚠️ Transaction without hash:', transaction.id);
+        return true; // Process transactions without hash
+      }
+      const isDuplicate = existingHashes.has(transaction.hash);
+      if (isDuplicate) {
+        results.duplicates++;
+        console.log('🔄 Skipping duplicate:', transaction.hash.substring(0, 10) + '...');
+      }
+      return !isDuplicate;
     });
     
-    results.duplicates = categorizedTransactions.length - uniqueTransactions.length;
-    console.log(`📊 Found ${results.duplicates} duplicates, saving ${uniqueTransactions.length} new transactions`);
-    
+    console.log('📋 Found', results.duplicates, 'duplicates, saving', uniqueTransactions.length, 'new transactions');
+
     if (uniqueTransactions.length === 0) {
-      console.log('✅ No new transactions to save');
+      console.log('⚠️ No new transactions to save after duplicate filtering');
       return results;
     }
-    
-    // Batch write to database
+
+    // CRITICAL: Batch write to database with detailed logging
+    console.log('💾 STARTING CRITICAL BATCH WRITE OPERATION');
     const batch = writeBatch(db);
-    const transactionsRef = collection(db, COLLECTIONS.USER_TRANSACTIONS(userId));
+    const collectionPath = COLLECTIONS.USER_TRANSACTIONS(userId);
+    const transactionsRef = collection(db, collectionPath);
     
-    console.log('💾 Starting batch write to collection:', COLLECTIONS.USER_TRANSACTIONS(userId));
-    console.log('💾 Writing', uniqueTransactions.length, 'transactions to batch');
-    
-    uniqueTransactions.forEach((transaction) => {
-      const docRef = doc(transactionsRef, transaction.id);
-      const dbTransaction = transactionToDatabase(transaction, userId);
-      console.log('📄 Adding to batch - Doc ID:', transaction.id, 'Description:', transaction.description.substring(0, 50));
-      batch.set(docRef, dbTransaction);
+    console.log('💾 Collection path:', collectionPath);
+    console.log('💾 Collection reference created:', !!transactionsRef);
+    console.log('💾 Batch created:', !!batch);
+    console.log('💾 About to add', uniqueTransactions.length, 'transactions to batch');
+
+    let batchItemsAdded = 0;
+    uniqueTransactions.forEach((transaction, index) => {
+      try {
+        const docRef = doc(transactionsRef, transaction.id);
+        const dbTransaction = transactionToDatabase(transaction, userId);
+        
+        console.log(`📄 [${index + 1}/${uniqueTransactions.length}] Adding to batch:`, {
+          docId: transaction.id,
+          docRef: !!docRef,
+          dbTransaction: !!dbTransaction,
+          description: transaction.description.substring(0, 30) + '...',
+          amount: transaction.amount
+        });
+        
+        batch.set(docRef, dbTransaction);
+        batchItemsAdded++;
+      } catch (error) {
+        console.error(`❌ Error adding transaction ${index + 1} to batch:`, error);
+        results.errors.push(`Failed to add transaction ${transaction.id}: ${error}`);
+      }
     });
     
-    console.log('💾 Committing batch with', uniqueTransactions.length, 'documents...');
+    console.log('💾 Successfully added', batchItemsAdded, 'items to batch');
+    console.log('💾 COMMITTING BATCH - This is the critical moment...');
+    
+    // The critical batch commit
+    const startTime = Date.now();
     await batch.commit();
-    console.log('✅ Batch commit completed successfully');
+    const endTime = Date.now();
+    
+    console.log('\u2705 BATCH COMMIT COMPLETED in', endTime - startTime, 'ms');
+    console.log('\u2705 Should have written', batchItemsAdded, 'documents to', collectionPath);
+    
+    // IMMEDIATE VERIFICATION: Check if documents actually exist
+    console.log('\ud83d\udd0d IMMEDIATE VERIFICATION: Checking if documents were actually written...');
+    try {
+      const verificationQuery = await getDocs(collection(db, collectionPath));
+      console.log('\ud83d\udd0d VERIFICATION RESULT: Found', verificationQuery.size, 'documents in collection');
+      
+      if (verificationQuery.size !== batchItemsAdded) {
+        console.error('\u274c VERIFICATION FAILED: Expected', batchItemsAdded, 'documents, found', verificationQuery.size);
+      } else {
+        console.log('\u2705 VERIFICATION PASSED: Document count matches expected');
+      }
+      
+      // List some document IDs for verification
+      const foundDocIds: string[] = [];
+      verificationQuery.forEach(doc => {
+        foundDocIds.push(doc.id);
+        if (foundDocIds.length <= 3) {
+          console.log('\ud83d\udcc4 VERIFICATION: Found doc ID:', doc.id);
+        }
+      });
+      
+    } catch (verificationError) {
+      console.error('\u274c VERIFICATION ERROR:', verificationError);
+    }
     
     results.saved = uniqueTransactions.length;
+    console.log(`✅ saveTransactions completed - Results:`, results);
     
-    console.log(`✅ Successfully saved ${results.saved} transactions`);
     return results;
     
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('❌ Error saving transactions:', error);
-    results.errors.push(`Save failed: ${errorMessage}`);
+    const errorMessage = `Database save failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    console.error('💥 CRITICAL ERROR in saveTransactions:', error);
+    console.error('💥 Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    results.errors.push(errorMessage);
     return results;
   }
 };
