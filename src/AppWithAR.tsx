@@ -193,7 +193,7 @@ function MainApp() {
     try {
       const result = await processRawTransactionsSimple(
         rawTransactions,
-        setPipelineProgress
+        currentUser!.uid
       );
       
       if (result.success) {
