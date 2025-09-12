@@ -37,7 +37,7 @@ type ActiveView = 'upload' | 'cashflow' | 'ar';
 
 // Main App Component with AR Integration
 function MainApp() {
-  const { user } = useAuth();
+  const { currentUser } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>('cashflow');
   
   // Existing state
@@ -70,7 +70,7 @@ function MainApp() {
   // AR Services (initialized when config is available)
   const [arService, setArService] = useState<any>(null);
 
-  // Initialize AR service when config changes
+  // Initialize AR service when config is available
   useEffect(() => {
     if (arConfig.enabled && arConfig.campfireApiKey) {
       const campfireService = createCampfireService(arConfig.campfireApiKey);
