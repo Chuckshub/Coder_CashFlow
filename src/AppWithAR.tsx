@@ -46,9 +46,13 @@ function MainApp() {
   const [weeklyCashflows, setWeeklyCashflows] = useState<WeeklyCashflowWithAR[]>([]);
   const [startingBalance, setStartingBalance] = useState<number>(50000);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [pipelineProgress, setPipelineProgress] = useState<PipelineProgress>({ 
-    step: 'idle', 
-    progress: 0 
+  const [pipelineProgress, setPipelineProgress] = useState<PipelineProgress>({
+    stage: 'parsing',
+    message: 'Idle',
+    progress: 0,
+    completed: 0,
+    total: 0,
+    errors: [],
   });
   
   // AR-related state
