@@ -183,3 +183,61 @@ export interface ExportOptions {
   includeEstimates: boolean;
   includeActuals: boolean;
 }
+
+// Accounts Receivable (AR) Integration Types
+export interface AREstimate {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  clientName: string;
+  amount: number;
+  dueDate: Date;
+  estimatedCollectionDate: Date;
+  confidence: 'high' | 'medium' | 'low';
+  status: 'current' | 'overdue' | 'collections';
+  paymentTerms: string;
+  daysOverdue: number;
+  weekNumber: number; // Which cashflow week this is expected to be collected
+  source: 'campfire' | 'manual';
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// AR Summary for dashboard display
+export interface ARSummary {
+  totalOutstanding: number;
+  totalCurrent: number;
+  totalOverdue: number;
+  agingBuckets: {
+    current: number;
+    days_1_30: number;
+    days_31_60: number;
+    days_61_90: number;
+    days_over_90: number;
+  };
+  estimatedCollections: {
+    thisWeek: number;
+    next4Weeks: number;
+    next13Weeks: number;
+  };
+  lastUpdated: Date;
+}
+
+// AR Configuration
+export interface ARConfig {
+  campfireApiKey?: string;
+  autoRefreshInterval?: number; // minutes
+  collectionAssumptions: {
+    currentOnTime: number; // percentage collected on time
+    overdueCollectionRate: number; // percentage of overdue that gets collected
+    averageDelayDays: number; // average days late for collections
+  };
+  enabled: boolean;
+}
+
+// Enhanced Weekly Cashflow with AR data
+export interface WeeklyCashflowWithAR extends WeeklyCashflow {
+  arEstimates: AREstimate[];
+  estimatedARInflow: number;
+}
