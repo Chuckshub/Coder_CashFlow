@@ -171,7 +171,7 @@ const CashflowTableWithAR: React.FC<CashflowTableWithARProps> = ({
                         {weekLabel}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {formatWeekRange(week.weekStart, week.weekEnd)}
+                        {formatWeekRange(week.weekStart)}
                       </div>
                     </div>
                   </td>
@@ -404,10 +404,10 @@ const CashflowTableWithAR: React.FC<CashflowTableWithARProps> = ({
         <EstimateModal
           isOpen={modalState.isOpen}
           onClose={() => setModalState({ isOpen: false, weekNumber: 0, type: null })}
-          onSubmit={handleEstimateSubmit}
+          onSave={handleEstimateSubmit}
           weekNumber={modalState.weekNumber}
           type={modalState.type!}
-          initialData={modalState.editingEstimate}
+          estimate={modalState.editingEstimate}
         />
       )}
     </div>

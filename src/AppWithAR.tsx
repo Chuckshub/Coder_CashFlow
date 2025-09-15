@@ -5,7 +5,7 @@ import UserHeader from './components/common/UserHeader';
 import CSVUpload from './components/DataImport/CSVUpload';
 import FirebaseStatus from './components/common/FirebaseStatus';
 import EstimateCreatorModal from './components/common/EstimateCreatorModal';
-import CashflowTable from './components/CashflowTable/CashflowTable';
+import CashflowTableWithAR from './components/CashflowTable/CashflowTableWithAR';
 import AREstimatesPanel from './components/AREstimates/AREstimatesPanel';
 import ARConfigModal from './components/AREstimates/ARConfigModal';
 
@@ -46,6 +46,7 @@ function MainApp() {
   const [weeklyCashflows, setWeeklyCashflows] = useState<WeeklyCashflowWithAR[]>([]);
   const [startingBalance, setStartingBalance] = useState<number>(50000);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
   const [pipelineProgress, setPipelineProgress] = useState<PipelineProgress>({
     stage: 'parsing',
     message: 'Idle',
@@ -157,7 +158,8 @@ function MainApp() {
   };
 
   // Handle AR configuration changes
-  const handleArConfigChange = (newConfig: ARConfig) => {
+  const handleArConfigChange = (configUpdate: Partial<ARConfig>) => {
+    const newConfig = { ...arConfig, ...configUpdate };
     setArConfig(newConfig);
     // Save to localStorage or Firebase
     localStorage.setItem('arConfig', JSON.stringify(newConfig));
@@ -188,8 +190,9 @@ function MainApp() {
   }, []);
 
   // Existing functions (simplified for space)
-  const handleCSVData = useCallback(async (rawTransactions: RawTransaction[]) => {
+  const handleCSVDataParsed = useCallback(async (rawTransactions: RawTransaction[]) => {
     setIsLoading(true);
+    setError('');
     try {
       const result = await processRawTransactionsSimple(
         rawTransactions,
@@ -197,14 +200,24 @@ function MainApp() {
       );
       
       if (result.success) {
-        setTransactions(result.processedTransactions || []);
+        // Data will be available through real-time subscriptions or manual reload
+        console.log('✅ Transactions processed successfully');
         setActiveView('cashflow');
+      } else {
+        setError('Failed to process transactions');
       }
     } catch (error) {
       console.error('Failed to process transactions:', error);
+      setError(error instanceof Error ? error.message : 'Unknown error occurred');
     } finally {
       setIsLoading(false);
     }
+  }, [currentUser]);
+
+  const handleCSVError = useCallback((errorMessage: string) => {
+    console.error('💥 CSV error:', errorMessage);
+    setError(errorMessage);
+    setIsLoading(false);
   }, []);
 
   const handleEstimateCreate = (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -285,7 +298,10 @@ function MainApp() {
                 </p>
               </div>
               <div className="p-6">
-                <CSVUpload onDataReceived={handleCSVData} isLoading={isLoading} />
+                <CSVUpload 
+                  onDataParsed={handleCSVDataParsed} 
+                  onError={handleCSVError}
+                />
               </div>
             </div>
           </div>
@@ -343,7 +359,7 @@ function MainApp() {
             </div>
 
             {/* Cashflow Table */}
-            <CashflowTable
+            <CashflowTableWithAR
               weeklyCashflows={weeklyCashflows}
               estimates={estimates}
               onEstimateCreate={handleEstimateCreate}
