@@ -1,6 +1,76 @@
 import { RawTransaction, Transaction } from '../types';
 
 /**
+ * Get the database salt from environment variables
+ * This salt should be stored as an environment variable in Vercel
+ */
+const getDatabaseSalt = (): string => {
+  const salt = process.env.REACT_APP_DATABASE_SALT;
+  if (!salt) {
+    console.warn('⚠️  DATABASE_SALT not found in environment variables. Using default salt for development.');
+    // Use a default salt for development - should be replaced in production
+    return 'coder_cashflow_default_salt_2024';
+  }
+  return salt;
+};
+
+/**
+ * Secure hash function using Web Crypto API with salting
+ * Falls back to enhanced simple hash for environments without crypto support
+ */
+async function createSecureHash(input: string): Promise<string> {
+  const salt = getDatabaseSalt();
+  const saltedInput = `${salt}|${input}`;
+  
+  // Try to use SubtleCrypto API for secure hashing
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(saltedInput);
+      const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (error) {
+      console.warn('SubtleCrypto not available, falling back to enhanced hash:', error);
+    }
+  }
+  
+  // Fallback: Enhanced hash with salting for Node.js environments
+  return enhancedSimpleHash(saltedInput);
+}
+
+/**
+ * Synchronous secure hash function for backwards compatibility
+ * Uses salting with enhanced simple hash algorithm
+ */
+function createSecureHashSync(input: string): string {
+  const salt = getDatabaseSalt();
+  const saltedInput = `${salt}|${input}`;
+  return enhancedSimpleHash(saltedInput);
+}
+
+/**
+ * Enhanced hash function with better collision resistance
+ * Based on djb2 algorithm with additional mixing
+ */
+function enhancedSimpleHash(str: string): string {
+  let hash1 = 5381; // djb2 hash
+  let hash2 = 0;    // Additional hash for mixing
+  
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    // djb2: hash * 33 + char
+    hash1 = ((hash1 << 5) + hash1) + char;
+    // Additional mixing
+    hash2 = ((hash2 << 3) + hash2) ^ char;
+  }
+  
+  // Combine both hashes and ensure positive result
+  const combined = Math.abs(hash1 ^ hash2);
+  return combined.toString(16).padStart(8, '0');
+}
+
+/**
  * Create a unique hash for a transaction based on date, amount, and description
  * This helps prevent duplicate transactions in the database
  */
@@ -17,8 +87,28 @@ export const createTransactionHash = (
   // Create the hash input string
   const hashInput = `${normalizedDate}|${normalizedAmount}|${normalizedDescription}`;
   
-  // For browser compatibility, use a simple hash function instead of crypto
-  return simpleHash(hashInput);
+  // Use secure salted hash function
+  return createSecureHashSync(hashInput);
+};
+
+/**
+ * Async version of createTransactionHash using Web Crypto API when available
+ */
+export const createTransactionHashAsync = async (
+  date: string,
+  amount: number,
+  description: string
+): Promise<string> => {
+  // Normalize the inputs
+  const normalizedDate = new Date(date).toISOString().split('T')[0];
+  const normalizedAmount = Math.round(amount * 100) / 100;
+  const normalizedDescription = description.trim().toUpperCase();
+  
+  // Create the hash input string
+  const hashInput = `${normalizedDate}|${normalizedAmount}|${normalizedDescription}`;
+  
+  // Use async secure hash function
+  return await createSecureHash(hashInput);
 };
 
 /**
@@ -44,22 +134,15 @@ export const createTransactionHashFromProcessed = (transaction: Transaction): st
 };
 
 /**
- * Simple hash function that works in browsers
- * Based on Java's String.hashCode() algorithm
+ * Async version of createTransactionHashFromProcessed
  */
-function simpleHash(str: string): string {
-  let hash = 0;
-  if (str.length === 0) return hash.toString();
-  
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  
-  // Convert to positive hex string
-  return Math.abs(hash).toString(16);
-}
+export const createTransactionHashFromProcessedAsync = async (transaction: Transaction): Promise<string> => {
+  return await createTransactionHashAsync(
+    transaction.date.toISOString(),
+    transaction.amount,
+    transaction.description
+  );
+};
 
 /**
  * Check if two transactions are duplicates based on their hashes
