@@ -403,6 +403,22 @@ const ClientPayments: React.FC = () => {
   );
   const totalActiveAmount = activePayments.reduce((sum, p) => sum + p.amountDue, 0);
 
+  // Calculate last import date from existing payments
+  const getLastImportDate = (): Date | null => {
+    const importedPayments = payments.filter(p => p.isImported && p.lastCampfireSync);
+    if (importedPayments.length === 0) return null;
+    
+    // Find the most recent lastCampfireSync date
+    const lastSync = importedPayments.reduce((latest, payment) => {
+      const syncDate = payment.lastCampfireSync!;
+      return syncDate > latest ? syncDate : latest;
+    }, importedPayments[0].lastCampfireSync!);
+    
+    return lastSync;
+  };
+
+  const lastImportDate = getLastImportDate();
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -495,7 +511,7 @@ const ClientPayments: React.FC = () => {
         <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
           <div className="text-sm text-yellow-600">Last Import</div>
           <div className="text-lg font-semibold text-yellow-800">
-            {importStatus.lastImport ? importStatus.lastImport.toLocaleDateString() : 'Never'}
+            {lastImportDate ? lastImportDate.toLocaleDateString() : 'Never'}
           </div>
         </div>
       </div>
