@@ -9,6 +9,7 @@ import { Transaction, Estimate, WeeklyCashflow, AREstimate, WeeklyCashflowWithAR
   WeeklyCashflowWithProjections, CashflowProjections, ClientPaymentProjection
  } from '../types';
 import { generate13Weeks } from '../utils/dateUtils';
+import { getCampfireProjectionService } from './campfireProjectionService';
 
 export interface CashflowCalculationOptions {
   includeAREstimates: boolean;
@@ -334,10 +335,10 @@ export function calculateWeeklyCashflowsWithProjections(
     // For Phase 1 & 2: Simple integration without complex projection service
     // TODO: Integrate with actual client payments from Firebase
     return baseCashflows.map(week => ({
-      ...week,
-      projectedClientPayments: 0,
-      clientPaymentProjections: []
-    }));
+        ...week,
+        projectedClientPayments: 0,
+        clientPaymentProjections: []
+      }));
 
   } catch (error) {
     console.error('Error calculating weekly cashflows with projections:', error);
@@ -426,5 +427,162 @@ export async function generateCashflowScenariosWithProjections(
         lastUpdated: new Date()
       }
     };
+  }
+}
+
+/**
+ * Calculate weekly cashflows with projections generated directly from Campfire invoices
+ */
+export function calculateWeeklyCashflowsWithCampfireProjections(
+  transactions: Transaction[],
+  estimates: Estimate[],
+  startingBalance: number,
+  invoices: any[], // CampfireInvoice[] - using any for now to avoid circular imports
+  options: CashflowCalculationOptions = { includeAREstimates: false }
+): WeeklyCashflowWithProjections[] {
+  try {
+    console.log('📈 Calculating weekly cashflows with Campfire invoice projections...');
+    
+    // First get the base cashflow with AR
+    const baseCashflows = calculateWeeklyCashflowsWithAR(
+      transactions,
+      estimates,
+      startingBalance,
+      options
+    );
+
+    // Generate projections from Campfire invoices
+    const projectionService = getCampfireProjectionService();
+    const projections = projectionService.generateProjectionsFromInvoices(invoices);
+    
+    console.log(`💰 Generated ${projections.length} client payment projections`);
+    
+    // Aggregate projections by week number
+    const weeklyProjections = projectionService.aggregateProjectionsByWeek(projections);
+    
+    // Integrate projections into weekly cashflows
+    let runningBalance = startingBalance;
+    
+    return baseCashflows.map((week, index) => {
+      const weekNumber = index - 1; // Convert to week numbers (-1, 0, 1, 2, ...)
+      const weekProjections = weeklyProjections.get(weekNumber);
+      
+      const projectedClientPayments = weekProjections ? weekProjections.totalAmount : 0;
+      const clientPaymentProjections = weekProjections ? weekProjections.projections : [];
+      
+      // Recalculate totals including projections
+      const totalInflow = week.totalInflow + projectedClientPayments;
+      const netCashflow = totalInflow - week.totalOutflow;
+      
+      if (index === 0) {
+        runningBalance += netCashflow;
+      } else {
+        runningBalance += netCashflow;
+      }
+      
+      return {
+        ...week,
+        totalInflow,
+        netCashflow,
+        endingBalance: runningBalance,
+        projectedClientPayments,
+        clientPaymentProjections
+      };
+    });
+    
+  } catch (error) {
+    console.error('Error calculating weekly cashflows with Campfire projections:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generate different scenarios with Campfire invoice projections
+ */
+export function generateCampfireProjectionScenarios(
+  transactions: Transaction[],
+  estimates: Estimate[],
+  startingBalance: number,
+  invoices: any[], // CampfireInvoice[]
+  arEstimates?: AREstimate[]
+) {
+  console.log('🔮 Generating Campfire projection scenarios...');
+  
+  try {
+    const projectionService = getCampfireProjectionService();
+    
+    // Generate base projections
+    const baseProjections = projectionService.generateProjectionsFromInvoices(invoices);
+    
+    // Apply different confidence adjustments for scenarios
+    const optimisticProjections = projectionService.applyConfidenceAdjustments(baseProjections, 'optimistic');
+    const realisticProjections = projectionService.applyConfidenceAdjustments(baseProjections, 'realistic');
+    const pessimisticProjections = projectionService.applyConfidenceAdjustments(baseProjections, 'pessimistic');
+    
+    // Generate AR estimates for different scenarios
+    const baseAREstimates = arEstimates || [];
+    const optimisticAR = baseAREstimates.map(estimate => ({
+      ...estimate,
+      amount: estimate.amount * 1.2,
+      confidence: 'high' as const
+    }));
+    
+    const realisticAR = baseAREstimates.map(estimate => ({
+      ...estimate,
+      amount: estimate.amount,
+      confidence: 'medium' as const
+    }));
+    
+    const pessimisticAR = baseAREstimates.map(estimate => ({
+      ...estimate,
+      amount: estimate.amount * 0.7,
+      confidence: 'low' as const
+    }));
+    
+    // Calculate cashflows for each scenario
+    return {
+      optimistic: calculateWeeklyCashflowsWithCampfireProjections(
+        transactions, estimates, startingBalance, 
+        optimisticProjections.map(p => ({ 
+          // Convert projection back to invoice-like format
+          due_date: p.originalDueDate.toISOString(),
+          amount_due: p.expectedAmount,
+          client_name: p.clientName,
+          invoice_number: p.invoiceNumbers[0] || 'PROJ',
+          status: 'open',
+          past_due_days: 0
+        })),
+        { includeAREstimates: true, arEstimates: optimisticAR }
+      ),
+      realistic: calculateWeeklyCashflowsWithCampfireProjections(
+        transactions, estimates, startingBalance,
+        realisticProjections.map(p => ({
+          due_date: p.originalDueDate.toISOString(),
+          amount_due: p.expectedAmount,
+          client_name: p.clientName,
+          invoice_number: p.invoiceNumbers[0] || 'PROJ',
+          status: 'open',
+          past_due_days: 0
+        })),
+        { includeAREstimates: true, arEstimates: realisticAR }
+      ),
+      pessimistic: calculateWeeklyCashflowsWithCampfireProjections(
+        transactions, estimates, startingBalance,
+        pessimisticProjections.map(p => ({
+          due_date: p.originalDueDate.toISOString(),
+          amount_due: p.expectedAmount,
+          client_name: p.clientName,
+          invoice_number: p.invoiceNumbers[0] || 'PROJ',
+          status: 'open',
+          past_due_days: 0
+        })),
+        { includeAREstimates: true, arEstimates: pessimisticAR }
+      ),
+      projectionSummary: projectionService.getProjectionSummary(baseProjections)
+    };
+    
+  } catch (error) {
+    console.error('Error generating Campfire projection scenarios:', error);
+    throw error;
   }
 }

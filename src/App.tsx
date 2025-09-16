@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { Transaction, WeeklyCashflow, RawTransaction, Estimate } from './types';
+import { Transaction, WeeklyCashflow, RawTransaction, Estimate, BankBalance } from './types';
 import { formatCurrency, generate13Weeks } from './utils/dateUtils';
 import { processRawTransactionsSimple, PipelineProgress, PipelineResult } from './services/csvToFirebasePipelineSimple';
 import { getSimpleDataLoader, DataLoadingState } from './services/dataLoaderSimple';
@@ -16,6 +16,8 @@ import FirebaseStatus from './components/common/FirebaseStatus';
 import { testFirebaseConnection } from './utils/firebaseTest';
 import EstimateCreatorModal from './components/common/EstimateCreatorModal';
 import ClientPayments from './components/ClientPayments/ClientPayments';
+import { calculateWeeklyCashflowsWithCampfireProjections } from './services/cashflowCalculationService';
+// Removed CampfireTest import
 
 type ActiveView = 'upload' | 'cashflow' | 'dataManagement' | 'campfireData';
 
