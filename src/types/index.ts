@@ -92,8 +92,19 @@ export interface WeeklyCashflow {
   totalOutflow: number;
   netCashflow: number;
   runningBalance: number;
+  actualBankBalance?: number; // User-entered actual bank balance for reconciliation
   estimates: Estimate[];
   transactions: Transaction[];
+}
+
+// Bank balance data for Firebase storage
+export interface BankBalance {
+  id: string; // Composite key: userId-weekNumber
+  userId: string;
+  weekNumber: number;
+  actualBalance: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // Rolling week structure

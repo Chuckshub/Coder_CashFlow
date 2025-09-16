@@ -128,6 +128,9 @@ function DatabaseApp() {
     hasData: false
   });
 
+  // State for actual bank balances (keyed by week number)
+  const [bankBalances, setBankBalances] = useState<Map<number, number>>(new Map());
+
   // Modal state for estimate creator information
   const [estimateModalState, setEstimateModalState] = useState<{
     isOpen: boolean;
@@ -206,6 +209,19 @@ function DatabaseApp() {
     // Also load estimates
     loadEstimatesFromDatabase();
     
+    // Load bank balances
+    const loadBankBalances = async () => {
+      try {
+        const firebaseService = getSimpleFirebaseService(currentUser.uid);
+        const bankBalanceMap = await firebaseService.loadBankBalances();
+        setBankBalances(bankBalanceMap);
+        console.log(`✅ Loaded ${bankBalanceMap.size} bank balances from Firebase`);
+      } catch (error) {
+        console.error('Error loading bank balances:', error);
+      }
+    };
+    loadBankBalances();
+    
     return () => {
       console.log('🗏 Cleaning up transaction subscription');
       unsubscribe();
@@ -219,8 +235,14 @@ function DatabaseApp() {
     }
     
     console.log('📊 Recalculating weekly cashflows with', transactions.length, 'transactions and', estimates.length, 'estimates');
-    return calculateWeeklyCashflows(transactions, estimates, 0);
-  }, [transactions, estimates]);
+    const baseWeeklyCashflows = calculateWeeklyCashflows(transactions, estimates, 0);
+    
+    // Add bank balance data to each week
+    return baseWeeklyCashflows.map(weekData => ({
+      ...weekData,
+      actualBankBalance: bankBalances.get(weekData.weekNumber) || undefined
+    }));
+  }, [transactions, estimates, bankBalances]);
 
   // Handle CSV data parsing using simplified pipeline
   const handleCSVDataParsed = useCallback(async (rawTransactions: RawTransaction[]) => {
@@ -424,6 +446,51 @@ function DatabaseApp() {
   const clearError = useCallback(() => {
     setError(null);
   }, []);
+
+  // Handle bank balance updates
+  const handleBankBalanceUpdate = useCallback(async (weekNumber: number, actualBalance: number | null) => {
+    console.log('🏦 Updating bank balance for week', weekNumber, 'to', actualBalance);
+    
+    if (!currentUser?.uid) {
+      console.error('No authenticated user for bank balance update');
+      return;
+    }
+    
+    try {
+      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      
+      if (actualBalance === null) {
+        // Delete the bank balance
+        const result = await firebaseService.deleteBankBalance(weekNumber);
+        if (result.success) {
+          setBankBalances(prev => {
+            const newBalances = new Map(prev);
+            newBalances.delete(weekNumber);
+            return newBalances;
+          });
+        } else {
+          console.error('Failed to delete bank balance:', result.error);
+          setError(`Failed to delete bank balance: ${result.error}`);
+        }
+      } else {
+        // Save the bank balance
+        const result = await firebaseService.saveBankBalance(weekNumber, actualBalance);
+        if (result.success) {
+          setBankBalances(prev => {
+            const newBalances = new Map(prev);
+            newBalances.set(weekNumber, actualBalance);
+            return newBalances;
+          });
+        } else {
+          console.error('Failed to save bank balance:', result.error);
+          setError(`Failed to save bank balance: ${result.error}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating bank balance:', error);
+      setError(`Error updating bank balance: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, [currentUser?.uid]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -660,6 +727,7 @@ function DatabaseApp() {
                 onDeleteEstimate={deleteEstimate}
                 onEstimateClick={handleEstimateClick}
                 onRefreshData={refreshAllData}
+                onBankBalanceUpdate={handleBankBalanceUpdate}
               />
             ) : (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">

@@ -12,6 +12,7 @@ interface CashflowTableProps {
   onDeleteEstimate: (id: string) => void;
   onEstimateClick?: (estimateId: string) => void; // Optional click handler to show creator info
   onRefreshData?: () => void; // Optional refresh callback
+  onBankBalanceUpdate?: (weekNumber: number, actualBalance: number | null) => void; // New callback for bank balance updates
 }
 
 interface ModalState {
@@ -29,7 +30,8 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
   onUpdateEstimate, 
   onDeleteEstimate,
   onEstimateClick,
-  onRefreshData
+  onRefreshData,
+  onBankBalanceUpdate
 }) => {
   const [modalState, setModalState] = useState<ModalState>({
     isOpen: false,
@@ -187,8 +189,11 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
               <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
                 Net Cashflow
               </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
                 Running Balance
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actual Bank Balance
               </th>
             </tr>
           </thead>
@@ -249,6 +254,41 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
                   <td className="px-4 py-3 text-center">
                     <div className={`text-sm font-medium ${getBalanceColor(weekData.runningBalance)}`}>
                       {formatCurrency(weekData.runningBalance)}
+                    </div>
+                  </td>
+                  
+                  {/* Bank Balance Input Cell */}
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex flex-col items-center space-y-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Enter actual balance"
+                        value={weekData.actualBankBalance || ''}
+                        onChange={(e) => {
+                          const value = e.target.value === '' ? null : parseFloat(e.target.value);
+                          onBankBalanceUpdate?.(weekData.weekNumber, value);
+                        }}
+                        onBlur={(e) => {
+                          // Validate and format on blur
+                          const value = e.target.value === '' ? null : parseFloat(e.target.value);
+                          if (value !== null && !isNaN(value)) {
+                            onBankBalanceUpdate?.(weekData.weekNumber, value);
+                          }
+                        }}
+                        className="w-28 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      {weekData.actualBankBalance && weekData.runningBalance && (
+                        <div className={`text-xs ${
+                          Math.abs(weekData.actualBankBalance - weekData.runningBalance) < 0.01
+                            ? 'text-green-600'
+                            : Math.abs(weekData.actualBankBalance - weekData.runningBalance) > 1000
+                            ? 'text-red-600'
+                            : 'text-yellow-600'
+                        }`}>
+                          Diff: {formatCurrency(weekData.actualBankBalance - weekData.runningBalance)}
+                        </div>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -666,6 +666,135 @@ export class SimpleFirebaseService {
       return { success: false, error: errorMsg };
     }
   }
+
+  /**
+   * Get collection path for bank balances
+   */
+  private getBankBalancesCollectionPath(): string {
+    return `users/${this.userId}/bankBalances`;
+  }
+
+  /**
+   * Save or update bank balance for a specific week
+   */
+  async saveBankBalance(weekNumber: number, actualBalance: number): Promise<{ success: boolean; error?: string }> {
+    console.log('🏦 Saving bank balance for week', weekNumber, ':', actualBalance);
+    
+    if (!db) {
+      return { success: false, error: 'Firebase not initialized' };
+    }
+
+    try {
+      const bankBalanceId = `week-${weekNumber}`;
+      const collectionRef = collection(db, this.getBankBalancesCollectionPath());
+      const docRef = doc(collectionRef, bankBalanceId);
+      
+      const bankBalanceData = {
+        id: bankBalanceId,
+        userId: this.userId,
+        weekNumber,
+        actualBalance,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+      
+      await setDoc(docRef, bankBalanceData);
+      console.log('✅ Bank balance saved successfully');
+      return { success: true };
+      
+    } catch (error) {
+      const errorMsg = `Failed to save bank balance: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error('💥 Error saving bank balance:', error);
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  /**
+   * Delete bank balance for a specific week
+   */
+  async deleteBankBalance(weekNumber: number): Promise<{ success: boolean; error?: string }> {
+    console.log('🗑️ Deleting bank balance for week', weekNumber);
+    
+    if (!db) {
+      return { success: false, error: 'Firebase not initialized' };
+    }
+
+    try {
+      const bankBalanceId = `week-${weekNumber}`;
+      const collectionRef = collection(db, this.getBankBalancesCollectionPath());
+      const docRef = doc(collectionRef, bankBalanceId);
+      
+      await deleteDoc(docRef);
+      console.log('✅ Bank balance deleted successfully');
+      return { success: true };
+      
+    } catch (error) {
+      const errorMsg = `Failed to delete bank balance: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error('💥 Error deleting bank balance:', error);
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  /**
+   * Load all bank balances for the user
+   */
+  async loadBankBalances(): Promise<Map<number, number>> {
+    console.log('💰 Loading bank balances...');
+    
+    if (!db) {
+      console.error('Firebase not initialized');
+      return new Map();
+    }
+
+    try {
+      const collectionRef = collection(db, this.getBankBalancesCollectionPath());
+      const querySnapshot = await getDocs(collectionRef);
+      
+      const bankBalances = new Map<number, number>();
+      
+      querySnapshot.forEach(doc => {
+        const data = doc.data();
+        try {
+          bankBalances.set(data.weekNumber, data.actualBalance);
+        } catch (error) {
+          console.error('Error parsing bank balance document:', doc.id, error);
+        }
+      });
+      
+      console.log(`✅ Loaded ${bankBalances.size} bank balances`);
+      return bankBalances;
+      
+    } catch (error) {
+      console.error('💥 Error loading bank balances:', error);
+      return new Map();
+    }
+  }
+
+  /**
+   * Real-time listener for bank balances
+   */
+  subscribeToBankBalances(callback: (bankBalances: Map<number, number>) => void): () => void {
+    console.log('👂 Setting up real-time bank balance listener...');
+    
+    const collectionRef = collection(db, this.getBankBalancesCollectionPath());
+    
+    return onSnapshot(collectionRef, (snapshot) => {
+      console.log('🔄 Real-time bank balance update - found', snapshot.size, 'documents');
+      
+      const bankBalances = new Map<number, number>();
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        try {
+          bankBalances.set(data.weekNumber, data.actualBalance);
+        } catch (error) {
+          console.error('Error parsing bank balance document:', doc.id, error);
+        }
+      });
+      
+      callback(bankBalances);
+    });
+  }
 }
 
 // ============================================================================
