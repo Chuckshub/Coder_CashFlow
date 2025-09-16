@@ -17,7 +17,21 @@ const ClientPaymentRow: React.FC<ClientPaymentRowProps> = ({ payment, onUpdate, 
     payment.expectedPaymentDate.toISOString().split('T')[0]
   );
   const [editedStatus, setEditedStatus] = useState(payment.status);
-  const [editedDaysUntilDue, setEditedDaysUntilDue] = useState(payment.daysUntilDue);
+  
+  // Calculate days until due dynamically
+  const calculateDaysUntilDue = (paymentDate: Date): number => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const targetDate = new Date(paymentDate);
+    targetDate.setHours(0, 0, 0, 0);
+    
+    const timeDiff = targetDate.getTime() - today.getTime();
+    return Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+  };
+  
+  const currentDaysUntilDue = calculateDaysUntilDue(payment.expectedPaymentDate);
+  const [editedDaysUntilDue, setEditedDaysUntilDue] = useState(currentDaysUntilDue);
   const [editedNotes, setEditedNotes] = useState(payment.notes || '');
 
   const handleSave = () => {
@@ -33,7 +47,7 @@ const ClientPaymentRow: React.FC<ClientPaymentRowProps> = ({ payment, onUpdate, 
   const handleCancel = () => {
     setEditedDate(payment.expectedPaymentDate.toISOString().split('T')[0]);
     setEditedStatus(payment.status);
-    setEditedDaysUntilDue(payment.daysUntilDue);
+    setEditedDaysUntilDue(currentDaysUntilDue);
     setEditedNotes(payment.notes || '');
     setIsEditing(false);
   };
@@ -147,8 +161,8 @@ const ClientPaymentRow: React.FC<ClientPaymentRowProps> = ({ payment, onUpdate, 
             <option value="60">60 (Due in 2 months)</option>
           </select>
         ) : (
-          <span className={`text-sm font-medium ${getDaysColor(payment.daysUntilDue)}`}>
-            {formatDays(payment.daysUntilDue)}
+          <span className={`text-sm font-medium ${getDaysColor(currentDaysUntilDue)}`}>
+            {formatDays(currentDaysUntilDue)}
           </span>
         )}
       </td>
@@ -544,9 +558,22 @@ const ClientPayments: React.FC = () => {
               ) : (
                 payments
                   .sort((a, b) => {
+                    // Calculate days until due dynamically for both payments
+                    const getDaysUntilDue = (payment: ClientPayment) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const paymentDate = new Date(payment.expectedPaymentDate);
+                      paymentDate.setHours(0, 0, 0, 0);
+                      const timeDiff = paymentDate.getTime() - today.getTime();
+                      return Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+                    };
+                    
+                    const aDays = getDaysUntilDue(a);
+                    const bDays = getDaysUntilDue(b);
+                    
                     // Sort by days until due (overdue first), then by expected payment date
-                    if (a.daysUntilDue !== b.daysUntilDue) {
-                      return a.daysUntilDue - b.daysUntilDue;
+                    if (aDays !== bDays) {
+                      return aDays - bDays;
                     }
                     return a.expectedPaymentDate.getTime() - b.expectedPaymentDate.getTime();
                   })
