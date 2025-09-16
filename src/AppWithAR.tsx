@@ -29,7 +29,7 @@ import {
 import { getSimpleDataLoader, DataLoadingState } from './services/dataLoaderSimple';
 import { testFirebaseConnection } from './utils/firebaseTest';
 import { getSimpleFirebaseService } from './services/firebaseServiceSimple';
-import { createCampfireService } from './services/campfireService';
+import { getCampfireService } from './services/campfireService';
 import { createARIntegrationService } from './services/arIntegrationService';
 import { calculateWeeklyCashflowsWithAR, CashflowCalculationOptions } from './services/cashflowCalculationService';
 
@@ -78,8 +78,7 @@ function MainApp() {
   // Initialize AR service when config is available
   useEffect(() => {
     if (arConfig.enabled && arConfig.campfireApiKey) {
-      const campfireService = createCampfireService(arConfig.campfireApiKey);
-      const integrationService = createARIntegrationService(campfireService, arConfig);
+      const integrationService = createARIntegrationService(arConfig);
       setArService(integrationService);
     } else {
       setArService(null);
@@ -141,8 +140,7 @@ function MainApp() {
   // Test Campfire connection
   const testCampfireConnection = async (apiKey: string) => {
     try {
-      const campfireService = createCampfireService(apiKey);
-      const testService = createARIntegrationService(campfireService, { 
+      const testService = createARIntegrationService({ 
         ...arConfig, 
         campfireApiKey: apiKey,
         enabled: true 

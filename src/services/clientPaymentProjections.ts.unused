@@ -1,0 +1,284 @@
+import { 
+  CampfireInvoice, 
+  ClientPaymentProjection, 
+  CashflowProjections,
+  WeeklyCashflowWithProjections
+} from '../types';
+import { getCampfireService } from './campfireService';
+import { generate13Weeks } from '../utils/dateUtils';
+
+/**
+ * Service for calculating client payment projections based on Campfire invoices
+ */
+class ClientPaymentProjectionService {
+  private campfireService = getCampfireService();
+
+  /**
+   * Calculate which week a due date falls into
+   */
+  private getWeekNumberForDate(date: Date, weeklyPeriods: Array<{ weekNumber: number; weekStart: Date; weekEnd: Date }>): number | null {
+    for (const period of weeklyPeriods) {
+      if (date >= period.weekStart && date <= period.weekEnd) {
+        return period.weekNumber;
+      }
+    }
+    return null; // Date falls outside our 13-week window
+  }
+
+  /**
+   * Determine confidence level based on invoice characteristics
+   */
+  private calculateConfidence(invoice: CampfireInvoice): 'high' | 'medium' | 'low' {
+    // Simple logic for Phase 1 & 2:
+    // - High: Recent invoices with standard terms, not past due
+    // - Medium: Standard invoices that might be slightly past due
+    // - Low: Very past due or unusual circumstances
+    
+    const pastDueDays = invoice.past_due_days || 0;
+    const amount = invoice.amount_due;
+    
+    // High confidence: Not past due, standard terms
+    if (pastDueDays <= 0 && invoice.terms === 'net_30' && amount < 100000) {
+      return 'high';
+    }
+    
+    // Low confidence: Very past due or very large amounts
+    if (pastDueDays > 30 || amount > 500000) {
+      return 'low';
+    }
+    
+    // Medium confidence: Everything else
+    return 'medium';
+  }
+
+  /**
+   * Generate client payment projections from Campfire invoices
+   */
+  async generateProjections(): Promise<CashflowProjections> {
+    console.log('📊 Generating client payment projections...');
+    
+    if (!this.campfireService.isConfigured()) {
+      console.warn('⚠️ Campfire not configured, returning empty projections');
+      return {
+        clientPayments: [],
+        totalProjectedAmount: 0,
+        invoiceCount: 0,
+        lastUpdated: new Date()
+      };
+    }
+
+    try {
+      // Fetch open invoices from Campfire
+      const invoices = await this.campfireService.fetchAllOpenInvoices();
+      
+      if (invoices.length === 0) {
+        console.log('💰 No open invoices found in Campfire');
+        return {
+          clientPayments: [],
+          totalProjectedAmount: 0,
+          invoiceCount: 0,
+          lastUpdated: new Date()
+        };
+      }
+
+      // Generate 13-week periods
+      const weeklyPeriods = generate13Weeks().map(week => ({
+        weekNumber: week.weekNumber,
+        weekStart: week.weekStart,
+        weekEnd: week.weekEnd
+      }));
+
+      // Group invoices by week based on due date
+      const projectionMap = new Map<number, {
+        weekNumber: number;
+        weekStart: Date;
+        weekEnd: Date;
+        invoices: CampfireInvoice[];
+      }>();
+
+      let processedInvoices = 0;
+      let skippedInvoices = 0;
+
+      for (const invoice of invoices) {
+        try {
+          const dueDate = new Date(invoice.due_date);
+          
+          // Skip invalid dates
+          if (isNaN(dueDate.getTime())) {
+            console.warn(`⚠️ Skipping invoice ${invoice.invoice_number}: invalid due date ${invoice.due_date}`);
+            skippedInvoices++;
+            continue;
+          }
+
+          const weekNumber = this.getWeekNumberForDate(dueDate, weeklyPeriods);
+          
+          if (weekNumber === null) {
+            // Invoice due date is outside our 13-week window
+            console.log(`📅 Invoice ${invoice.invoice_number} due ${dueDate.toLocaleDateString()} falls outside 13-week window`);
+            skippedInvoices++;
+            continue;
+          }
+
+          if (!projectionMap.has(weekNumber)) {
+            const weekPeriod = weeklyPeriods.find(w => w.weekNumber === weekNumber)!;
+            projectionMap.set(weekNumber, {
+              weekNumber,
+              weekStart: weekPeriod.weekStart,
+              weekEnd: weekPeriod.weekEnd,
+              invoices: []
+            });
+          }
+
+          projectionMap.get(weekNumber)!.invoices.push(invoice);
+          processedInvoices++;
+        } catch (error) {
+          console.error(`Error processing invoice ${invoice.invoice_number}:`, error);
+          skippedInvoices++;
+        }
+      }
+
+      console.log(`📊 Processed ${processedInvoices} invoices, skipped ${skippedInvoices}`);
+
+      // Convert to projection array
+      const clientPayments: ClientPaymentProjection[] = [];
+      let totalProjectedAmount = 0;
+
+      for (const [weekNumber, weekData] of projectionMap) {
+        // Group by client for this week
+        const clientGroups = new Map<string, CampfireInvoice[]>();
+        
+        for (const invoice of weekData.invoices) {
+          const clientName = invoice.client_name;
+          if (!clientGroups.has(clientName)) {
+            clientGroups.set(clientName, []);
+          }
+          clientGroups.get(clientName)!.push(invoice);
+        }
+
+        // Create projections for each client in this week
+        for (const [clientName, clientInvoices] of clientGroups) {
+          const expectedAmount = clientInvoices.reduce((sum, inv) => sum + inv.amount_due, 0);
+          const invoiceNumbers = clientInvoices.map(inv => inv.invoice_number);
+          
+          // Use the earliest due date as the "original" due date
+          const dueDates = clientInvoices.map(inv => new Date(inv.due_date));
+          const originalDueDate = new Date(Math.min(...dueDates.map(d => d.getTime())));
+          
+          // Calculate overall confidence for this client's payments
+          const confidences = clientInvoices.map(inv => this.calculateConfidence(inv));
+          const avgConfidence = this.getAverageConfidence(confidences);
+
+          const projection: ClientPaymentProjection = {
+            weekNumber,
+            weekStart: weekData.weekStart,
+            weekEnd: weekData.weekEnd,
+            expectedAmount,
+            clientName,
+            invoiceNumbers,
+            originalDueDate,
+            confidence: avgConfidence,
+            invoiceCount: clientInvoices.length
+          };
+
+          clientPayments.push(projection);
+          totalProjectedAmount += expectedAmount;
+        }
+      }
+
+      // Sort by week number
+      clientPayments.sort((a, b) => a.weekNumber - b.weekNumber);
+
+      console.log(`✅ Generated ${clientPayments.length} client payment projections for ${invoices.length} invoices`);
+      console.log(`💰 Total projected amount: $${totalProjectedAmount.toLocaleString()}`);
+
+      return {
+        clientPayments,
+        totalProjectedAmount,
+        invoiceCount: invoices.length,
+        lastUpdated: new Date()
+      };
+
+    } catch (error) {
+      console.error('💥 Error generating client payment projections:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate average confidence level
+   */
+  private getAverageConfidence(confidences: ('high' | 'medium' | 'low')[]): 'high' | 'medium' | 'low' {
+    const scores = confidences.map(c => c === 'high' ? 3 : c === 'medium' ? 2 : 1);
+    const avgScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+    
+    if (avgScore >= 2.5) return 'high';
+    if (avgScore >= 1.5) return 'medium';
+    return 'low';
+  }
+
+  /**
+   * Integrate client payment projections into weekly cashflow data
+   */
+  integrateProjectionsIntoWeeklyCashflow(
+    weeklyCashflows: any[], 
+    projections: CashflowProjections
+  ): WeeklyCashflowWithProjections[] {
+    console.log('🔗 Integrating client payment projections into weekly cashflow...');
+    
+    // Create a map of projections by week number
+    const projectionsByWeek = new Map<number, ClientPaymentProjection[]>();
+    
+    for (const projection of projections.clientPayments) {
+      if (!projectionsByWeek.has(projection.weekNumber)) {
+        projectionsByWeek.set(projection.weekNumber, []);
+      }
+      projectionsByWeek.get(projection.weekNumber)!.push(projection);
+    }
+
+    // Enhance each weekly cashflow with projections
+    const enhancedCashflows: WeeklyCashflowWithProjections[] = weeklyCashflows.map(week => {
+      const weekProjections = projectionsByWeek.get(week.weekNumber) || [];
+      const projectedClientPayments = weekProjections.reduce((sum, proj) => sum + proj.expectedAmount, 0);
+
+      return {
+        ...week,
+        projectedClientPayments,
+        clientPaymentProjections: weekProjections
+      };
+    });
+
+    console.log(`✅ Enhanced ${enhancedCashflows.length} weekly cashflow periods with projections`);
+    return enhancedCashflows;
+  }
+
+  /**
+   * Test the projection service
+   */
+  async testProjections(): Promise<{ success: boolean; message: string; projectionCount?: number }> {
+    try {
+      const projections = await this.generateProjections();
+      return {
+        success: true,
+        message: `Successfully generated ${projections.clientPayments.length} projections`,
+        projectionCount: projections.clientPayments.length
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+}
+
+// Singleton instance
+let projectionServiceInstance: ClientPaymentProjectionService | null = null;
+
+export const getClientPaymentProjectionService = (): ClientPaymentProjectionService => {
+  if (!projectionServiceInstance) {
+    projectionServiceInstance = new ClientPaymentProjectionService();
+  }
+  return projectionServiceInstance;
+};
+
+export default ClientPaymentProjectionService;

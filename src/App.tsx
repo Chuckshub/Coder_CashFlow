@@ -15,8 +15,10 @@ import UserHeader from './components/common/UserHeader';
 import FirebaseStatus from './components/common/FirebaseStatus';
 import { testFirebaseConnection } from './utils/firebaseTest';
 import EstimateCreatorModal from './components/common/EstimateCreatorModal';
+import CampfireTest from './components/CampfireTest/CampfireTest';
+import ClientPayments from './components/ClientPayments/ClientPayments';
 
-type ActiveView = 'upload' | 'cashflow' | 'dataManagement';
+type ActiveView = 'upload' | 'cashflow' | 'dataManagement' | 'campfireTest' | 'clientPayments';
 
 // Calculate weekly cashflows from transactions and estimates
 function calculateWeeklyCashflows(
@@ -551,6 +553,26 @@ function DatabaseApp() {
               >
                 Data Management
               </button>
+              <button
+                onClick={() => setActiveView('campfireTest')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeView === 'campfireTest'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                🔥 Campfire Test
+              </button>
+              <button
+                onClick={() => setActiveView('clientPayments')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeView === 'clientPayments'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                💰 Client Payments
+              </button>
             </nav>
             
             {/* Real-time Status */}
@@ -755,6 +777,20 @@ function DatabaseApp() {
         {activeView === 'dataManagement' && (
           <div className="px-4 sm:px-0">
             <DataManagement />
+          </div>
+        )}
+
+        {/* Campfire Test View */}
+        {activeView === 'campfireTest' && (
+          <div className="px-4 sm:px-0">
+            <CampfireTest />
+          </div>
+        )}
+
+        {/* Client Payments View */}
+        {activeView === 'clientPayments' && (
+          <div className="px-4 sm:px-0">
+            <ClientPayments />
           </div>
         )}
       </div>

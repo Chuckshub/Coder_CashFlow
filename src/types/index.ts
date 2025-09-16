@@ -252,3 +252,134 @@ export interface WeeklyCashflowWithAR extends WeeklyCashflow {
   arEstimates: AREstimate[];
   estimatedARInflow: number;
 }
+
+// Campfire API Types
+export interface CampfireInvoiceLine {
+  id: number;
+  product_name: string;
+  service_date: string;
+  description: string;
+  quantity: number;
+  rate: number;
+  currency: string;
+  amount: number;
+  tax: number;
+  discount: number;
+  discount_percentage: number;
+  discount_amount: number;
+  created_at: string;
+  last_modified_at: string;
+  product: number;
+}
+
+export interface CampfirePayment {
+  id: number;
+  credit_memo: any;
+  payment_transaction_bank_description: string;
+  payment_journal_entry_order: string;
+  currency: string;
+  amount: number;
+  payment_date: string;
+  created_at: string;
+  voided_date: string | null;
+  source: string;
+  last_modified_at: string;
+}
+
+export interface CampfireInvoice {
+  id: number;
+  lines: CampfireInvoiceLine[];
+  payments: CampfirePayment[];
+  client_name: string;
+  client_email: string | null;
+  status: 'open' | 'paid' | 'past_due' | 'voided';
+  past_due_days: number | null;
+  entity_name: string;
+  entity_currency: string;
+  total_amount: number;
+  amount_paid: number;
+  amount_due: number;
+  contract_name: string;
+  invoice_number: string;
+  item_date: string;
+  invoice_date: string;
+  due_date: string;
+  paid_date: string | null;
+  terms: string;
+  currency: string;
+  payment_status: 'open' | 'paid';
+  created_at: string;
+  last_modified_at: string;
+}
+
+export interface CampfireApiResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: CampfireInvoice[];
+}
+
+// Client Payment Projection Types
+export interface ClientPaymentProjection {
+  weekNumber: number;
+  weekStart: Date;
+  weekEnd: Date;
+  expectedAmount: number;
+  clientName: string;
+  invoiceNumbers: string[];
+  originalDueDate: Date;
+  confidence: 'high' | 'medium' | 'low';
+  invoiceCount: number;
+}
+
+export interface WeeklyCashflowWithProjections extends WeeklyCashflow {
+  projectedClientPayments?: number;
+  clientPaymentProjections?: ClientPaymentProjection[];
+}
+
+// Enhanced Weekly Cashflow for Campfire integration
+export interface CashflowProjections {
+  clientPayments: ClientPaymentProjection[];
+  totalProjectedAmount: number;
+  invoiceCount: number;
+  lastUpdated: Date;
+}
+
+// Client Payment Management Types (for Campfire integration)
+export interface ClientPayment {
+  id: string; // Firebase document ID
+  campfireInvoiceId?: number; // Original Campfire invoice ID (if imported)
+  clientName: string;
+  invoiceNumber: string;
+  originalAmount: number;
+  amountDue: number;
+  originalDueDate: Date;
+  expectedPaymentDate: Date; // User can modify this
+  status: 'pending' | 'partially_paid' | 'paid' | 'overdue';
+  confidence: 'high' | 'medium' | 'low';
+  description?: string;
+  notes?: string;
+  paymentTerms?: string;
+  isImported: boolean; // Whether this came from Campfire or was manually created
+  lastCampfireSync?: Date; // When this was last synced from Campfire
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// For the import process
+export interface CampfireImportSummary {
+  totalInvoices: number;
+  importedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  errors: string[];
+  importedPayments: ClientPayment[];
+}
+
+// Status for the import process
+export interface ImportStatus {
+  isImporting: boolean;
+  progress: number;
+  message: string;
+  lastImport?: Date;
+}

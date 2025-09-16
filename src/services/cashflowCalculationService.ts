@@ -5,7 +5,9 @@
  * AR estimates from Campfire integration.
  */
 
-import { Transaction, Estimate, WeeklyCashflow, AREstimate, WeeklyCashflowWithAR } from '../types';
+import { Transaction, Estimate, WeeklyCashflow, AREstimate, WeeklyCashflowWithAR,
+  WeeklyCashflowWithProjections, CashflowProjections, ClientPaymentProjection
+ } from '../types';
 import { generate13Weeks } from '../utils/dateUtils';
 
 export interface CashflowCalculationOptions {
@@ -289,4 +291,140 @@ export function performARScenarioAnalysis(
       arEstimates: pessimisticAR,
     }),
   };
+}
+
+/**
+ * Enhanced cashflow calculation that includes client payment projections
+ */
+export interface CashflowCalculationOptionsWithProjections extends CashflowCalculationOptions {
+  includeClientProjections?: boolean;
+  clientProjections?: CashflowProjections;
+}
+
+/**
+ * Calculate weekly cashflows with client payment projections
+ */
+export function calculateWeeklyCashflowsWithProjections(
+  transactions: Transaction[],
+  estimates: Estimate[],
+  startingBalance: number,
+  options: CashflowCalculationOptionsWithProjections = { 
+    includeAREstimates: false,
+    includeClientProjections: false
+  }
+): WeeklyCashflowWithProjections[] {
+  try {
+    // First get the base cashflow with AR
+    const baseCashflows = calculateWeeklyCashflowsWithAR(
+      transactions,
+      estimates,
+      startingBalance,
+      options
+    );
+
+    // If client projections not requested, just return enhanced base cashflows
+    if (!options.includeClientProjections || !options.clientProjections) {
+      return baseCashflows.map(week => ({
+        ...week,
+        projectedClientPayments: 0,
+        clientPaymentProjections: []
+      }));
+    }
+
+    // For Phase 1 & 2: Simple integration without complex projection service
+    // TODO: Integrate with actual client payments from Firebase
+    return baseCashflows.map(week => ({
+      ...week,
+      projectedClientPayments: 0,
+      clientPaymentProjections: []
+    }));
+
+  } catch (error) {
+    console.error('Error calculating weekly cashflows with projections:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generate comprehensive cashflow scenarios with client projections
+ */
+export async function generateCashflowScenariosWithProjections(
+  transactions: Transaction[],
+  estimates: Estimate[],
+  startingBalance: number,
+  arEstimates?: AREstimate[]
+) {
+  console.log('🔮 Generating cashflow scenarios with client payment projections...');
+  
+  try {
+    // For Phase 1 & 2: Simple scenarios without complex client projections
+    // TODO: Add actual client payment integration from Firebase
+    
+    const emptyProjections: CashflowProjections = {
+      clientPayments: [],
+      totalProjectedAmount: 0,
+      invoiceCount: 0,
+      lastUpdated: new Date()
+    };
+    
+    // Generate base AR estimates for different scenarios
+    const baseAREstimates = arEstimates || [];
+    const optimisticAR = baseAREstimates.map((estimate, index) => ({
+      ...estimate,
+      amount: estimate.amount * 1.2, // 20% higher for optimistic
+      weekNumber: estimate.weekNumber,
+      confidence: 'high' as const,
+    }));
+    
+    const realisticAR = baseAREstimates.map((estimate, index) => ({
+      ...estimate,
+      amount: estimate.amount, // Base estimate
+      weekNumber: estimate.weekNumber,
+      confidence: 'medium' as const,
+    }));
+    
+    const pessimisticAR = baseAREstimates.map((estimate, index) => ({
+      ...estimate,
+      amount: estimate.amount * 0.7, // 30% lower for pessimistic
+      weekNumber: estimate.weekNumber,
+      confidence: 'low' as const,
+    }));
+    
+    return {
+      optimistic: calculateWeeklyCashflowsWithProjections(transactions, estimates, startingBalance, {
+        includeAREstimates: true,
+        arEstimates: optimisticAR,
+        includeClientProjections: false,
+        clientProjections: emptyProjections
+      }),
+      realistic: calculateWeeklyCashflowsWithProjections(transactions, estimates, startingBalance, {
+        includeAREstimates: true,
+        arEstimates: realisticAR,
+        includeClientProjections: false,
+        clientProjections: emptyProjections
+      }),
+      pessimistic: calculateWeeklyCashflowsWithProjections(transactions, estimates, startingBalance, {
+        includeAREstimates: true,
+        arEstimates: pessimisticAR,
+        includeClientProjections: false,
+        clientProjections: emptyProjections
+      }),
+      clientProjectionsSummary: emptyProjections
+    };
+    
+  } catch (error) {
+    console.error('Error generating cashflow scenarios with projections:', error);
+    // Fallback to basic scenario without projections
+    return {
+      optimistic: [],
+      realistic: [],
+      pessimistic: [],
+      clientProjectionsSummary: {
+        clientPayments: [],
+        totalProjectedAmount: 0,
+        invoiceCount: 0,
+        lastUpdated: new Date()
+      }
+    };
+  }
 }

@@ -5,16 +5,16 @@
  * AR estimates that can be integrated into the weekly cashflow projections.
  */
 
-import { CampfireService, CampfireInvoice, estimateCollectionTiming } from './campfireService';
-import { AREstimate, ARSummary, ARConfig } from '../types';
+import { getCampfireService } from './campfireService';
+import { AREstimate, ARSummary, ARConfig, CampfireInvoice } from '../types';
 import { generate13Weeks } from '../utils/dateUtils';
 
 export class ARIntegrationService {
-  private campfireService: CampfireService;
+  private campfireService: ReturnType<typeof getCampfireService>;
   private config: ARConfig;
 
-  constructor(campfireService: CampfireService, config: ARConfig) {
-    this.campfireService = campfireService;
+  constructor(config: ARConfig) {
+    this.campfireService = getCampfireService();
     this.config = config;
   }
 
@@ -25,47 +25,33 @@ export class ARIntegrationService {
     const weekDates = generate13Weeks();
     
     return invoices.map(invoice => {
-      const timing = estimateCollectionTiming(invoice);
       const dueDate = new Date(invoice.due_date);
       const now = new Date();
+      const daysPastDue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
       
-      // Calculate days overdue
-      const daysOverdue = Math.max(0, Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)));
-      
-      // Determine status
-      let status: 'current' | 'overdue' | 'collections';
-      if (daysOverdue === 0) {
-        status = 'current';
-      } else if (daysOverdue <= 90) {
-        status = 'overdue';
-      } else {
-        status = 'collections';
-      }
-      
-      // Find which week this collection falls into
-      const weekNumber = this.findWeekNumber(timing.estimatedCollectionDate, weekDates);
+      // Find which week this collection falls into (using due date)
+      const weekNumber = this.findWeekNumber(dueDate, weekDates);
       
       const arEstimate: AREstimate = {
         id: `campfire_${invoice.id}`,
-        invoiceId: invoice.id,
+        invoiceId: invoice.id.toString(),
         invoiceNumber: invoice.invoice_number,
-        clientName: invoice.client.name,
+        clientName: invoice.client_name,
         amount: invoice.amount_due,
-        dueDate,
-        estimatedCollectionDate: timing.estimatedCollectionDate,
-        confidence: timing.confidence,
-        status,
-        paymentTerms: invoice.payment_terms,
-        daysOverdue,
-        weekNumber,
+        dueDate: dueDate,
+        estimatedCollectionDate: dueDate, // Simple: use due date as collection date
+        confidence: daysPastDue <= 0 ? 'high' : daysPastDue <= 30 ? 'medium' : 'low',
+        status: daysPastDue > 0 ? 'overdue' : 'current',
+        paymentTerms: invoice.terms || 'net_30',
+        daysOverdue: Math.max(0, daysPastDue),
+        weekNumber: weekNumber,
         source: 'campfire',
-        notes: invoice.message_on_invoice,
         createdAt: new Date(),
-        updatedAt: new Date(),
+        updatedAt: new Date()
       };
       
       return arEstimate;
-    });
+    }).filter(estimate => estimate.weekNumber !== -1); // Filter out estimates outside our 13-week window
   }
 
   /**
@@ -97,7 +83,7 @@ export class ARIntegrationService {
       }
 
       // Fetch outstanding invoices from Campfire
-      const invoices = await this.campfireService.getOutstandingInvoices();
+      const invoices = await this.campfireService.fetchAllOpenInvoices();
       
       // Transform to AR estimates
       const arEstimates = this.transformInvoicesToAREstimates(invoices);
@@ -152,47 +138,54 @@ export class ARIntegrationService {
   async getARSummary(): Promise<ARSummary> {
     try {
       const estimates = await this.getAREstimates();
-      const agingData = await this.campfireService.getARAgingData();
       
-      // Calculate estimated collections by time period
-      const now = new Date();
-      const oneWeekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const fourWeeksLater = new Date(now.getTime() + 28 * 24 * 60 * 60 * 1000);
-      const thirteenWeeksLater = new Date(now.getTime() + 91 * 24 * 60 * 60 * 1000);
-      
-      const thisWeek = estimates
-        .filter(e => e.estimatedCollectionDate <= oneWeekLater)
-        .reduce((sum, e) => sum + e.amount, 0);
-        
-      const next4Weeks = estimates
-        .filter(e => e.estimatedCollectionDate > now && e.estimatedCollectionDate <= fourWeeksLater)
-        .reduce((sum, e) => sum + e.amount, 0);
-        
-      const next13Weeks = estimates
-        .filter(e => e.estimatedCollectionDate > now && e.estimatedCollectionDate <= thirteenWeeksLater)
-        .reduce((sum, e) => sum + e.amount, 0);
-      
-      const totalOutstanding = estimates.reduce((sum, e) => sum + e.amount, 0);
-      const totalOverdue = estimates
-        .filter(e => e.status === 'overdue' || e.status === 'collections')
-        .reduce((sum, e) => sum + e.amount, 0);
-      const totalCurrent = totalOutstanding - totalOverdue;
+      // Calculate basic summary from estimates
+      const totalOutstanding = estimates.reduce((sum, est) => sum + est.amount, 0);
+      const overdueAmount = estimates
+        .filter(est => est.status === 'overdue')
+        .reduce((sum, est) => sum + est.amount, 0);
+      const currentAmount = estimates
+        .filter(est => est.status === 'current')
+        .reduce((sum, est) => sum + est.amount, 0);
       
       return {
         totalOutstanding,
-        totalCurrent,
-        totalOverdue,
-        agingBuckets: agingData,
-        estimatedCollections: {
-          thisWeek,
-          next4Weeks,
-          next13Weeks,
+        totalCurrent: currentAmount,
+        totalOverdue: overdueAmount,
+        agingBuckets: {
+          current: currentAmount,
+          days_1_30: 0,
+          days_31_60: 0,
+          days_61_90: 0,
+          days_over_90: overdueAmount
         },
-        lastUpdated: new Date(),
+        estimatedCollections: {
+          thisWeek: 0,
+          next4Weeks: 0,
+          next13Weeks: totalOutstanding
+        },
+        lastUpdated: new Date()
       };
     } catch (error) {
-      console.error('Failed to get AR summary:', error);
-      throw error;
+      console.error('Error generating AR summary:', error);
+      return {
+        totalOutstanding: 0,
+        totalCurrent: 0,
+        totalOverdue: 0,
+        agingBuckets: {
+          current: 0,
+          days_1_30: 0,
+          days_31_60: 0,
+          days_61_90: 0,
+          days_over_90: 0
+        },
+        estimatedCollections: {
+          thisWeek: 0,
+          next4Weeks: 0,
+          next13Weeks: 0
+        },
+        lastUpdated: new Date()
+      };
     }
   }
 
@@ -236,7 +229,7 @@ export class ARIntegrationService {
         };
       }
       
-      const invoices = await this.campfireService.getOutstandingInvoices();
+      const invoices = await this.campfireService.fetchAllOpenInvoices();
       return {
         success: true,
         message: `Successfully connected to Campfire. Found ${invoices.length} outstanding invoices.`,
@@ -255,7 +248,6 @@ export class ARIntegrationService {
  * Create AR Integration Service with default configuration
  */
 export const createARIntegrationService = (
-  campfireService: CampfireService,
   config?: Partial<ARConfig>
 ): ARIntegrationService => {
   const defaultConfig: ARConfig = {
@@ -269,5 +261,5 @@ export const createARIntegrationService = (
     ...config,
   };
   
-  return new ARIntegrationService(campfireService, defaultConfig);
+  return new ARIntegrationService(defaultConfig);
 };

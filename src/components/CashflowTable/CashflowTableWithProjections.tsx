@@ -1,0 +1,413 @@
+import React, { useState } from 'react';
+import { 
+  WeeklyCashflowWithProjections, 
+  Estimate, 
+  Transaction, 
+  ClientPaymentProjection 
+} from '../../types';
+import { 
+  formatCurrency, 
+  formatWeekRange, 
+  getCurrencyColor, 
+  getBalanceColor 
+} from '../../utils/dateUtils';
+import EstimateModal from '../EstimateManager/EstimateModal';
+
+interface CashflowTableWithProjectionsProps {
+  weeklyCashflows: WeeklyCashflowWithProjections[];
+  transactions: Transaction[];
+  onAddEstimate: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onUpdateEstimate: (id: string, estimate: Partial<Estimate>) => void;
+  onDeleteEstimate: (id: string) => void;
+  onEstimateClick?: (estimateId: string) => void;
+  onRefreshData?: () => void;
+  onBankBalanceUpdate?: (weekNumber: number, actualBalance: number | null) => void;
+  showClientProjections?: boolean;
+}
+
+interface ModalState {
+  isOpen: boolean;
+  weekNumber: number;
+  type: 'inflow' | 'outflow' | null;
+  editingEstimate?: Estimate;
+}
+
+/**
+ * Get confidence color for client payment projections
+ */
+const getConfidenceColor = (confidence: 'high' | 'medium' | 'low') => {
+  switch (confidence) {
+    case 'high':
+      return 'text-green-600';
+    case 'medium':
+      return 'text-yellow-600';
+    case 'low':
+      return 'text-red-600';
+    default:
+      return 'text-gray-500';
+  }
+};
+
+/**
+ * Get confidence badge background color
+ */
+const getConfidenceBadgeColor = (confidence: 'high' | 'medium' | 'low') => {
+  switch (confidence) {
+    case 'high':
+      return 'bg-green-100 text-green-800';
+    case 'medium':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'low':
+      return 'bg-red-100 text-red-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+};
+
+/**
+ * Component for displaying client payment projection details
+ */
+const ClientProjectionTooltip: React.FC<{ 
+  projections: ClientPaymentProjection[] 
+}> = ({ projections }) => {
+  if (projections.length === 0) return null;
+  
+  return (
+    <div className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-3 mt-2 min-w-64">
+      <div className="text-xs font-medium text-gray-700 mb-2">
+        Expected Client Payments:
+      </div>
+      <div className="space-y-2">
+        {projections.map((projection, index) => (
+          <div key={index} className="flex justify-between items-center">
+            <div>
+              <div className="text-xs font-medium text-gray-800">
+                {projection.clientName}
+              </div>
+              <div className="text-xs text-gray-500">
+                {projection.invoiceCount} invoice{projection.invoiceCount !== 1 ? 's' : ''}
+              </div>
+              <div className="text-xs text-gray-400">
+                Due: {projection.originalDueDate.toLocaleDateString()}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className={`text-sm font-medium ${getCurrencyColor(projection.expectedAmount)}`}>
+                {formatCurrency(projection.expectedAmount)}
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full ${getConfidenceBadgeColor(projection.confidence)}`}>
+                {projection.confidence}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> = ({ 
+  weeklyCashflows, 
+  transactions, 
+  onAddEstimate, 
+  onUpdateEstimate, 
+  onDeleteEstimate,
+  onEstimateClick,
+  onRefreshData,
+  onBankBalanceUpdate,
+  showClientProjections = true
+}) => {
+  const [modalState, setModalState] = useState<ModalState>({
+    isOpen: false,
+    weekNumber: 1,
+    type: null
+  });
+  const [hoveredProjection, setHoveredProjection] = useState<{
+    weekNumber: number;
+    projections: ClientPaymentProjection[];
+  } | null>(null);
+
+  const openEstimateModal = (weekNumber: number, type: 'inflow' | 'outflow', estimate?: Estimate) => {
+    console.log('💼 Opening modal for week', weekNumber, 'type', type, estimate ? 'editing' : 'creating');
+    
+    setModalState({
+      isOpen: true,
+      weekNumber,
+      type,
+      editingEstimate: estimate,
+    });
+  };
+
+  const closeModal = () => {
+    setModalState({
+      isOpen: false,
+      weekNumber: 1,
+      type: null,
+      editingEstimate: undefined
+    });
+  };
+
+  const handleEstimateSubmit = (estimateData: any) => {
+    if (modalState.editingEstimate) {
+      onUpdateEstimate(modalState.editingEstimate.id, estimateData);
+    } else {
+      onAddEstimate({
+        ...estimateData,
+        weekNumber: modalState.weekNumber,
+        type: modalState.type!
+      });
+    }
+    closeModal();
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header with refresh button */}
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold text-gray-900">
+          13-Week Cashflow Projection
+          {showClientProjections && (
+            <span className="ml-2 text-sm text-gray-500">
+              (with client payment projections)
+            </span>
+          )}
+        </h3>
+        {onRefreshData && (
+          <button
+            onClick={onRefreshData}
+            className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            🔄 Refresh Data
+          </button>
+        )}
+      </div>
+
+      {/* Main table */}
+      <div className="bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                  Week
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                  Inflows
+                  {showClientProjections && (
+                    <div className="text-xs normal-case text-gray-400 mt-1">
+                      (+Client Payments)
+                    </div>
+                  )}
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                  Outflows
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                  Net Cashflow
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
+                  Running Balance
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actual Bank Balance
+                </th>
+              </tr>
+            </thead>
+            
+            <tbody className="bg-white divide-y divide-gray-200">
+              {weeklyCashflows.map((weekData) => {
+                const hasProjections = showClientProjections && 
+                  weekData.clientPaymentProjections && 
+                  weekData.clientPaymentProjections.length > 0;
+                  
+                return (
+                  <tr key={weekData.weekNumber} className="hover:bg-gray-50">
+                    {/* Week Column */}
+                    <td className="px-4 py-3 border-r border-gray-200">
+                      <div>
+                        <div className={`text-sm font-medium ${
+                          weekData.weekNumber === -1 ? 'text-red-600' : 
+                          weekData.weekNumber === 0 ? 'text-blue-600' : 
+                          'text-gray-900'
+                        }`}>
+                          Week {weekData.weekNumber}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {formatWeekRange(weekData.weekStart)}
+                        </div>
+                      </div>
+                    </td>
+                    
+                    {/* Inflows Column */}
+                    <td className="border-r border-gray-200 p-0">
+                      <div className="px-4 py-3">
+                        {/* Actual Inflows */}
+                        <div 
+                          className="cursor-pointer hover:bg-gray-100 rounded px-2 py-1 -mx-2 -my-1"
+                          onClick={() => openEstimateModal(weekData.weekNumber, 'inflow')}
+                        >
+                          <div className={`text-sm font-medium ${getCurrencyColor(weekData.actualInflow)}`}>
+                            {formatCurrency(weekData.actualInflow)}
+                          </div>
+                          {weekData.estimatedInflow > 0 && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Est: {formatCurrency(weekData.estimatedInflow)}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Client Payment Projections */}
+                        {hasProjections && (
+                          <div className="relative">
+                            <div 
+                              className="mt-2 cursor-pointer"
+                              onMouseEnter={() => setHoveredProjection({
+                                weekNumber: weekData.weekNumber,
+                                projections: weekData.clientPaymentProjections!
+                              })}
+                              onMouseLeave={() => setHoveredProjection(null)}
+                            >
+                              <div className="flex items-center justify-between bg-blue-50 rounded px-2 py-1">
+                                <div className="text-xs text-blue-600 font-medium">
+                                  🏢 Client Payments
+                                </div>
+                                <div className="text-sm font-medium text-blue-700">
+                                  {formatCurrency(weekData.projectedClientPayments || 0)}
+                                </div>
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {weekData.clientPaymentProjections!.length} client{weekData.clientPaymentProjections!.length !== 1 ? 's' : ''}
+                              </div>
+                            </div>
+                            
+                            {/* Tooltip */}
+                            {hoveredProjection?.weekNumber === weekData.weekNumber && (
+                              <ClientProjectionTooltip projections={hoveredProjection.projections} />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    
+                    {/* Outflows Column */}
+                    <td className="border-r border-gray-200 p-0">
+                      <div 
+                        className="px-4 py-3 cursor-pointer hover:bg-gray-100 rounded mx-2 my-1 -mx-2 -my-1"
+                        onClick={() => openEstimateModal(weekData.weekNumber, 'outflow')}
+                      >
+                        <div className={`text-sm font-medium ${getCurrencyColor(-weekData.actualOutflow)}`}>
+                          {formatCurrency(weekData.actualOutflow)}
+                        </div>
+                        {weekData.estimatedOutflow > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Est: {formatCurrency(weekData.estimatedOutflow)}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    
+                    {/* Net Cashflow Column */}
+                    <td className="px-4 py-3 text-center border-r border-gray-200">
+                      <div className={`text-sm font-medium ${getCurrencyColor(weekData.netCashflow)}`}>
+                        {formatCurrency(weekData.netCashflow)}
+                      </div>
+                      {(weekData.estimatedInflow > 0 || weekData.estimatedOutflow > 0) && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          Est: {formatCurrency(weekData.estimatedInflow - weekData.estimatedOutflow)}
+                        </div>
+                      )}
+                    </td>
+                    
+                    {/* Running Balance Column */}
+                    <td className="px-4 py-3 text-center">
+                      <div className={`text-sm font-medium ${getBalanceColor(weekData.runningBalance)}`}>
+                        {formatCurrency(weekData.runningBalance)}
+                      </div>
+                    </td>
+                    
+                    {/* Bank Balance Input Column */}
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex flex-col items-center space-y-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="Enter balance"
+                          value={weekData.actualBankBalance || ''}
+                          onChange={(e) => {
+                            const value = e.target.value === '' ? null : parseFloat(e.target.value);
+                            if (onBankBalanceUpdate) {
+                              onBankBalanceUpdate(weekData.weekNumber, value);
+                            }
+                          }}
+                          className="w-32 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        {weekData.actualBankBalance && (
+                          <div className={`text-xs ${getBalanceColor(weekData.actualBankBalance)}`}>
+                            {formatCurrency(weekData.actualBankBalance)}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Summary section for client projections */}
+      {showClientProjections && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-blue-800 mb-2">
+            📊 Client Payment Projections Summary
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <div className="text-gray-600">Total Projected Payments</div>
+              <div className="font-semibold text-blue-800">
+                {formatCurrency(
+                  weeklyCashflows.reduce((sum, week) => sum + (week.projectedClientPayments || 0), 0)
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="text-gray-600">Active Invoices</div>
+              <div className="font-semibold text-blue-800">
+                {weeklyCashflows.reduce((sum, week) => {
+                  return sum + (week.clientPaymentProjections?.reduce((clientSum, projection) => {
+                    return clientSum + projection.invoiceCount;
+                  }, 0) || 0);
+                }, 0)}
+              </div>
+            </div>
+            <div>
+              <div className="text-gray-600">Unique Clients</div>
+              <div className="font-semibold text-blue-800">
+                {new Set(
+                  weeklyCashflows.flatMap(week => 
+                    week.clientPaymentProjections?.map(p => p.clientName) || []
+                  )
+                ).size}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Estimate Modal */}
+      {modalState.isOpen && (
+        <EstimateModal
+          isOpen={modalState.isOpen}
+          onClose={closeModal}
+          onSave={handleEstimateSubmit}
+          weekNumber={modalState.weekNumber}
+          type={modalState.type!}
+          estimate={modalState.editingEstimate}
+        />
+      )}
+    </div>
+  );
+};
+
+export default CashflowTableWithProjections;
