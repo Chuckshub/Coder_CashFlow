@@ -211,6 +211,14 @@ const ClientPayments: React.FC = () => {
     testing: boolean;
     result: { success: boolean; message: string; invoiceCount?: number } | null;
   }>({ testing: false, result: null });
+  
+  // Live invoice data state
+  const [invoiceData, setInvoiceData] = useState<{
+    loading: boolean;
+    invoices: CampfireInvoice[];
+    error: string | null;
+    lastFetched: Date | null;
+  }>({ loading: false, invoices: [], error: null, lastFetched: null });
   const [error, setError] = useState<string | null>(null);
 
   const clientPaymentService = getClientPaymentService(currentUser?.uid || '');
@@ -327,6 +335,31 @@ const ClientPayments: React.FC = () => {
           message: error instanceof Error ? error.message : 'Unknown error' 
         } 
       });
+    }
+  };
+
+  const handleFetchInvoices = async () => {
+    console.log('🔥 Fetching live invoice data from Campfire...');
+    setInvoiceData(prev => ({ ...prev, loading: true, error: null }));
+    
+    try {
+      const invoices = await campfireService.fetchAllOpenInvoices();
+      console.log(`📄 Fetched ${invoices.length} open invoices`);
+      
+      setInvoiceData({
+        loading: false,
+        invoices,
+        error: null,
+        lastFetched: new Date()
+      });
+      
+    } catch (error) {
+      console.error('💥 Failed to fetch invoices:', error);
+      setInvoiceData(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }));
     }
   };
 
@@ -591,6 +624,95 @@ const ClientPayments: React.FC = () => {
                 <span> | Found {connectionTest.result.invoiceCount} total invoices</span>
               )}
             </p>
+          </div>
+        )}
+      </div>
+
+      {/* Live Invoice Data Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-lg font-medium text-gray-900">Live Invoice Data</h3>
+            <p className="text-sm text-gray-600">
+              {invoiceData.lastFetched ? 
+                `Last updated: ${invoiceData.lastFetched.toLocaleTimeString()}` : 
+                'Fetch invoices to see live data from Campfire'
+              }
+            </p>
+          </div>
+          <button
+            onClick={handleFetchInvoices}
+            disabled={invoiceData.loading || !campfireService.isConfigured()}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+          >
+            {invoiceData.loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Loading...
+              </>
+            ) : (
+              <>
+                🔥 Fetch Invoices
+              </>
+            )}
+          </button>
+        </div>
+        
+        {invoiceData.error && (
+          <div className="p-3 rounded-md bg-red-50 border border-red-200 mb-3">
+            <p className="text-sm text-red-700">❌ Error: {invoiceData.error}</p>
+          </div>
+        )}
+        
+        {invoiceData.invoices.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+              <div>
+                <p className="font-medium text-gray-900">
+                  {invoiceData.invoices.length} Open Invoices
+                </p>
+                <p className="text-sm text-gray-600">
+                  Total Outstanding: {formatCurrency(invoiceData.invoices.reduce((sum, inv) => sum + inv.amount_due, 0))}
+                </p>
+              </div>
+            </div>
+            
+            <div className="max-h-64 overflow-y-auto">
+              <div className="grid gap-2">
+                {invoiceData.invoices.slice(0, 10).map((invoice) => (
+                  <div key={invoice.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-md text-sm">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium">{invoice.client_name}</span>
+                        <span className="text-gray-500">#{invoice.invoice_number}</span>
+                      </div>
+                      <div className="text-gray-600 text-xs mt-1">
+                        Due: {new Date(invoice.due_date).toLocaleDateString()} 
+                        {invoice.past_due_days && invoice.past_due_days > 0 && (
+                          <span className="text-red-600 ml-2">({invoice.past_due_days} days overdue)</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium">{formatCurrency(invoice.amount_due)}</div>
+                      <div className={`text-xs px-2 py-1 rounded-full ${
+                        invoice.status === 'open' ? 'bg-green-100 text-green-800' :
+                        invoice.status === 'past_due' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {invoice.status === 'past_due' ? 'Overdue' : 'Open'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {invoiceData.invoices.length > 10 && (
+                  <div className="text-center p-2 text-gray-500 text-sm">
+                    ... and {invoiceData.invoices.length - 10} more invoices
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
