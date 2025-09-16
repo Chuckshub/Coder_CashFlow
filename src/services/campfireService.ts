@@ -26,7 +26,7 @@ class CampfireService {
   private getHeaders(): HeadersInit {
     return {
       'Content-Type': 'application/json',
-      'authorization': this.apiKey,
+      'Authorization': `Token ${this.apiKey}`,
     };
   }
 
