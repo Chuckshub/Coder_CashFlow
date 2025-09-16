@@ -1,24 +1,22 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Transaction, WeeklyCashflow, RawTransaction, Estimate } from './types';
+import { formatCurrency, generate13Weeks } from './utils/dateUtils';
+import { processRawTransactionsSimple, PipelineProgress, PipelineResult } from './services/csvToFirebasePipelineSimple';
+import { getSimpleDataLoader, DataLoadingState } from './services/dataLoaderSimple';
+import { getSimpleFirebaseService } from './services/firebaseServiceSimple';
+import { v4 as uuidv4 } from 'uuid';
+import CashflowTable from './components/CashflowTable/CashflowTable';
+import CSVUpload from './components/DataImport/CSVUpload';
+import DataManagement from './components/DataManagement/DataManagement';
+import AuthWrapper from './components/Auth/AuthWrapper';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import UserHeader from './components/common/UserHeader';
-import CSVUpload from './components/DataImport/CSVUpload';
 import FirebaseStatus from './components/common/FirebaseStatus';
-import EstimateCreatorModal from './components/common/EstimateCreatorModal';
-import CashflowTable from './components/CashflowTable/CashflowTable';
-import { Transaction, Estimate, WeeklyCashflow, RawTransaction } from './types';
-import { formatCurrency, generate13Weeks } from './utils/dateUtils';
-import { v4 as uuidv4 } from 'uuid';
-import { 
-  processRawTransactionsSimple, 
-  PipelineProgress, 
-  PipelineResult 
-} from './services/csvToFirebasePipelineSimple';
-import { getSimpleDataLoader, DataLoadingState } from './services/dataLoaderSimple';
 import { testFirebaseConnection } from './utils/firebaseTest';
-import { getSimpleFirebaseService } from './services/firebaseServiceSimple';
+import EstimateCreatorModal from './components/common/EstimateCreatorModal';
 
-type ActiveView = 'upload' | 'cashflow';
+type ActiveView = 'upload' | 'cashflow' | 'dataManagement';
 
 // Calculate weekly cashflows from transactions and estimates
 function calculateWeeklyCashflows(
@@ -474,7 +472,17 @@ function DatabaseApp() {
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                Cashflow Table
+                Cashflow
+              </button>
+              <button
+                onClick={() => setActiveView('dataManagement')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeView === 'dataManagement'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Data Management
               </button>
             </nav>
             
@@ -672,6 +680,13 @@ function DatabaseApp() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Data Management View */}
+        {activeView === 'dataManagement' && (
+          <div className="px-4 sm:px-0">
+            <DataManagement />
           </div>
         )}
       </div>

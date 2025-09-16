@@ -641,6 +641,31 @@ export class SimpleFirebaseService {
       throw error;
     }
   }
+
+  /**
+   * Delete a transaction by ID (which is actually the hash)
+   */
+  async deleteTransaction(transactionId: string): Promise<{ success: boolean; error?: string }> {
+    console.log('🗑️ Deleting transaction:', transactionId);
+    
+    if (!db) {
+      return { success: false, error: 'Firebase not initialized' };
+    }
+
+    try {
+      const collectionRef = collection(db, this.getCollectionPath());
+      const docRef = doc(collectionRef, transactionId);
+      await deleteDoc(docRef);
+      
+      console.log('✅ Transaction deleted successfully:', transactionId);
+      return { success: true };
+      
+    } catch (error) {
+      const errorMsg = `Failed to delete transaction: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error('💥 Error deleting transaction:', error);
+      return { success: false, error: errorMsg };
+    }
+  }
 }
 
 // ============================================================================
