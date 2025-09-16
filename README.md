@@ -165,8 +165,6 @@ MIT License - feel free to use this project for your own cashflow management nee
 
 Contributions welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
 
-<!-- Test push access - temporary line -->
-
 ---
 
 **Built for Coder Technologies, Inc.** - Professional cashflow management made simple.
