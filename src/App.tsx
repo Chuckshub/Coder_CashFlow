@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { Transaction, WeeklyCashflow, RawTransaction, Estimate, BankBalance } from './types';
+import { Transaction, Estimate, WeeklyCashflow, BankBalance, ClientPayment, WeeklyCashflowWithProjections, RawTransaction } from './types';
 import { formatCurrency, generate13Weeks } from './utils/dateUtils';
 import { processRawTransactionsSimple, PipelineProgress, PipelineResult } from './services/csvToFirebasePipelineSimple';
 import { getSimpleDataLoader, DataLoadingState } from './services/dataLoaderSimple';
 import { getSimpleFirebaseService } from './services/firebaseServiceSimple';
 import { v4 as uuidv4 } from 'uuid';
-import CashflowTable from './components/CashflowTable/CashflowTable';
+import CashflowTableWithProjections from './components/CashflowTable/CashflowTableWithProjections';
 import CSVUpload from './components/DataImport/CSVUpload';
 import DataManagement from './components/DataManagement/DataManagement';
 import AuthWrapper from './components/Auth/AuthWrapper';
@@ -17,6 +17,8 @@ import { testFirebaseConnection } from './utils/firebaseTest';
 import EstimateCreatorModal from './components/common/EstimateCreatorModal';
 import ClientPayments from './components/ClientPayments/ClientPayments';
 import { calculateWeeklyCashflowsWithCampfireProjections } from './services/cashflowCalculationService';
+import { getClientPaymentService } from './services/clientPaymentService';
+import { getCampfireService } from './services/campfireService';
 // Removed CampfireTest import
 
 type ActiveView = 'upload' | 'cashflow' | 'dataManagement' | 'campfireData';
@@ -118,6 +120,7 @@ function DatabaseApp() {
   const [activeView, setActiveView] = useState<ActiveView>('upload');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [clientPayments, setClientPayments] = useState<ClientPayment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +189,23 @@ function DatabaseApp() {
     }
   }, [currentUser?.uid]);
 
+  // Load client payments from Firebase
+  const loadClientPayments = useCallback(async () => {
+    if (!currentUser?.uid) return;
+    
+    console.log('💰 Loading client payments from Firebase...');
+    
+    try {
+      const clientPaymentService = getClientPaymentService(currentUser.uid);
+      const loadedPayments = await clientPaymentService.getClientPayments();
+      setClientPayments(loadedPayments);
+      console.log('✅ Loaded', loadedPayments.length, 'client payments from Firebase');
+    } catch (error: any) {
+      console.error('💥 Error loading client payments:', error);
+      setError(`Failed to load client payments: ${error.message}`);
+    }
+  }, [currentUser?.uid]);
+
   // Set up real-time transaction subscription
   useEffect(() => {
     if (!currentUser?.uid) return;
@@ -212,6 +232,9 @@ function DatabaseApp() {
     // Also load estimates
     loadEstimatesFromDatabase();
     
+    // Load client payments
+    loadClientPayments();
+    
     // Load bank balances
     const loadBankBalances = async () => {
       try {
@@ -229,23 +252,53 @@ function DatabaseApp() {
       console.log('🗏 Cleaning up transaction subscription');
       unsubscribe();
     };
-  }, [currentUser?.uid, loadTransactionsFromDatabase, loadEstimatesFromDatabase]);
+  }, [currentUser?.uid, loadTransactionsFromDatabase, loadEstimatesFromDatabase, loadClientPayments]);
 
   // Calculate weekly cashflows when data changes
-  const weeklyCashflows = React.useMemo(() => {
-    if (transactions.length === 0 && estimates.length === 0) {
+  const weeklyCashflows: WeeklyCashflowWithProjections[] = React.useMemo(() => {
+    if (transactions.length === 0 && estimates.length === 0 && clientPayments.length === 0) {
       return [];
     }
     
-    console.log('📊 Recalculating weekly cashflows with', transactions.length, 'transactions and', estimates.length, 'estimates');
-    const baseWeeklyCashflows = calculateWeeklyCashflows(transactions, estimates, 0);
+    console.log('📊 Recalculating weekly cashflows with', transactions.length, 'transactions,', estimates.length, 'estimates, and', clientPayments.length, 'client payments');
     
-    // Add bank balance data to each week
-    return baseWeeklyCashflows.map(weekData => ({
-      ...weekData,
-      actualBankBalance: bankBalances.get(weekData.weekNumber) || undefined
-    }));
-  }, [transactions, estimates, bankBalances]);
+    // Convert client payments to Campfire invoice format for the calculation service
+    const mockInvoices = clientPayments
+      .filter(payment => payment.status === 'pending' || payment.status === 'partially_paid')
+      .map(payment => ({
+        due_date: payment.expectedPaymentDate.toISOString(),
+        amount_due: payment.amountDue,
+        client_name: payment.clientName,
+        invoice_number: payment.invoiceNumber,
+        status: payment.status === 'pending' ? 'open' : 'partially_paid' as any,
+        past_due_days: 0 // Will be calculated by the service
+      }));
+    
+    try {
+      const cashflowsWithProjections = calculateWeeklyCashflowsWithCampfireProjections(
+        transactions,
+        estimates, 
+        0,
+        mockInvoices
+      );
+      
+      // Add bank balance data to each week
+      return cashflowsWithProjections.map(weekData => ({
+        ...weekData,
+        actualBankBalance: bankBalances.get(weekData.weekNumber) || undefined
+      }));
+    } catch (error) {
+      console.error('Error calculating cashflows with Campfire projections:', error);
+      // Fallback to basic calculation
+      const baseWeeklyCashflows = calculateWeeklyCashflows(transactions, estimates, 0);
+      return baseWeeklyCashflows.map(weekData => ({
+        ...weekData,
+        actualBankBalance: bankBalances.get(weekData.weekNumber) || undefined,
+        projectedClientPayments: 0,
+        clientPaymentProjections: []
+      }));
+    }
+  }, [transactions, estimates, bankBalances, clientPayments]);
 
   // Handle CSV data parsing using simplified pipeline
   const handleCSVDataParsed = useCallback(async (rawTransactions: RawTransaction[]) => {
@@ -732,7 +785,7 @@ function DatabaseApp() {
         {activeView === 'cashflow' && (
           <div className="px-4 sm:px-0">
             {weeklyCashflows.length > 0 ? (
-              <CashflowTable
+              <CashflowTableWithProjections
                 weeklyCashflows={weeklyCashflows}
                 transactions={transactions}
                 onAddEstimate={addEstimate}
