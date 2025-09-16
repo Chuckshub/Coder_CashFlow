@@ -75,6 +75,14 @@ const ClientPaymentRow: React.FC<ClientPaymentRowProps> = ({ payment, onUpdate, 
     return `${days}`;
   };
 
+  const capitalizeStatus = (status: string) => {
+    return status
+      .replace('_', ' ')  // Replace underscores with spaces
+      .split(' ')         // Split into words
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())  // Capitalize each word
+      .join(' ');         // Join back together
+  };
+
   return (
     <tr className="hover:bg-gray-50">
       <td className="px-4 py-3 border-r border-gray-200">
@@ -135,7 +143,7 @@ const ClientPaymentRow: React.FC<ClientPaymentRowProps> = ({ payment, onUpdate, 
           </select>
         ) : (
           <span className={`text-sm font-medium ${getStatusColor(payment.status)}`}>
-            {payment.status.replace('_', ' ')}
+            {capitalizeStatus(payment.status)}
           </span>
         )}
       </td>
