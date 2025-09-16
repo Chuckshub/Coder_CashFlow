@@ -5,12 +5,24 @@ import { RawTransaction, Transaction } from '../types';
  * This salt should be stored as an environment variable in Vercel
  */
 const getDatabaseSalt = (): string => {
-  const salt = process.env.REACT_APP_DATABASE_SALT;
+  // Try different possible environment variable names
+  const salt = process.env.REACT_APP_DATABASE_SALT || 
+               process.env.DATABASE_SALT || 
+               process.env.VITE_DATABASE_SALT;
+               
   if (!salt) {
-    console.warn('⚠️  DATABASE_SALT not found in environment variables. Using default salt for development.');
+    console.warn('⚠️  DATABASE_SALT not found in environment variables.');
+    console.warn('🔍 Available env vars:', Object.keys(process.env).filter(key => key.includes('SALT')));
+    console.warn('🔧 Using default salt for development - SHOULD BE REPLACED IN PRODUCTION');
+    
     // Use a default salt for development - should be replaced in production
-    return 'coder_cashflow_default_salt_2024';
+    const defaultSalt = 'coder_cashflow_default_salt_2024';
+    console.warn('🧂 Default salt being used:', defaultSalt.substring(0, 10) + '...');
+    return defaultSalt;
   }
+  
+  console.log('✅ Using production salt from environment variables');
+  console.log('🧂 Salt loaded (first 10 chars):', salt.substring(0, 10) + '...');
   return salt;
 };
 
@@ -46,7 +58,16 @@ async function createSecureHash(input: string): Promise<string> {
 function createSecureHashSync(input: string): string {
   const salt = getDatabaseSalt();
   const saltedInput = `${salt}|${input}`;
-  return enhancedSimpleHash(saltedInput);
+  
+  console.log('  🧂 Salt applied:', salt.substring(0, 15) + '...');
+  console.log('  🔗 Salted input length:', saltedInput.length);
+  
+  const result = enhancedSimpleHash(saltedInput);
+  
+  console.log('  ⚙️ Hash algorithm: enhancedSimpleHash');
+  console.log('  🎯 Final result:', result);
+  
+  return result;
 }
 
 /**
@@ -87,8 +108,19 @@ export const createTransactionHash = (
   // Create the hash input string
   const hashInput = `${normalizedDate}|${normalizedAmount}|${normalizedDescription}`;
   
+  console.log('🔍 Transaction hash generation:');
+  console.log('  📅 Date:', date, '->', normalizedDate);
+  console.log('  💰 Amount:', amount, '->', normalizedAmount);
+  console.log('  📝 Description length:', description.length, '->', normalizedDescription.length);
+  console.log('  🔗 Hash input:', hashInput.substring(0, 100) + (hashInput.length > 100 ? '...' : ''));
+  
   // Use secure salted hash function
-  return createSecureHashSync(hashInput);
+  const result = createSecureHashSync(hashInput);
+  
+  console.log('  ✨ Generated hash:', result);
+  console.log('  🔍 Hash length:', result.length);
+  
+  return result;
 };
 
 /**
