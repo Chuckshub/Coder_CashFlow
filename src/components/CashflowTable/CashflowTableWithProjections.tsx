@@ -33,35 +33,27 @@ interface ModalState {
 }
 
 /**
- * Get confidence color for client payment projections
+ * Get days until due badge background color
  */
-const getConfidenceColor = (confidence: 'high' | 'medium' | 'low') => {
-  switch (confidence) {
-    case 'high':
-      return 'text-green-600';
-    case 'medium':
-      return 'text-yellow-600';
-    case 'low':
-      return 'text-red-600';
-    default:
-      return 'text-gray-500';
+const getDaysBadgeColor = (days: number) => {
+  if (days < 0) {
+    return 'bg-red-100 text-red-800'; // Overdue
+  } else if (days <= 3) {
+    return 'bg-orange-100 text-orange-800'; // Due very soon
+  } else if (days <= 7) {
+    return 'bg-yellow-100 text-yellow-800'; // Due soon
+  } else {
+    return 'bg-green-100 text-green-800'; // Due later
   }
 };
 
 /**
- * Get confidence badge background color
+ * Format days display
  */
-const getConfidenceBadgeColor = (confidence: 'high' | 'medium' | 'low') => {
-  switch (confidence) {
-    case 'high':
-      return 'bg-green-100 text-green-800';
-    case 'medium':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'low':
-      return 'bg-red-100 text-red-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
+const formatDaysDisplay = (days: number) => {
+  if (days === 0) return 'Today';
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  return `${days}d`;
 };
 
 /**
@@ -95,8 +87,8 @@ const ClientProjectionTooltip: React.FC<{
               <div className={`text-sm font-medium ${getCurrencyColor(projection.expectedAmount)}`}>
                 {formatCurrency(projection.expectedAmount)}
               </div>
-              <span className={`text-xs px-2 py-1 rounded-full ${getConfidenceBadgeColor(projection.confidence)}`}>
-                {projection.confidence}
+              <span className={`text-xs px-2 py-1 rounded-full ${getDaysBadgeColor(projection.daysUntilDue)}`}>
+                {formatDaysDisplay(projection.daysUntilDue)}
               </span>
             </div>
           </div>

@@ -17,14 +17,14 @@ const ClientPaymentRow: React.FC<ClientPaymentRowProps> = ({ payment, onUpdate, 
     payment.expectedPaymentDate.toISOString().split('T')[0]
   );
   const [editedStatus, setEditedStatus] = useState(payment.status);
-  const [editedConfidence, setEditedConfidence] = useState(payment.confidence);
+  const [editedDaysUntilDue, setEditedDaysUntilDue] = useState(payment.daysUntilDue);
   const [editedNotes, setEditedNotes] = useState(payment.notes || '');
 
   const handleSave = () => {
     onUpdate(payment.id, {
       expectedPaymentDate: new Date(editedDate),
       status: editedStatus,
-      confidence: editedConfidence,
+      daysUntilDue: editedDaysUntilDue,
       notes: editedNotes.trim() || undefined
     });
     setIsEditing(false);
@@ -33,7 +33,7 @@ const ClientPaymentRow: React.FC<ClientPaymentRowProps> = ({ payment, onUpdate, 
   const handleCancel = () => {
     setEditedDate(payment.expectedPaymentDate.toISOString().split('T')[0]);
     setEditedStatus(payment.status);
-    setEditedConfidence(payment.confidence);
+    setEditedDaysUntilDue(payment.daysUntilDue);
     setEditedNotes(payment.notes || '');
     setIsEditing(false);
   };
@@ -48,13 +48,17 @@ const ClientPaymentRow: React.FC<ClientPaymentRowProps> = ({ payment, onUpdate, 
     }
   };
 
-  const getConfidenceColor = (confidence: ClientPayment['confidence']) => {
-    switch (confidence) {
-      case 'high': return 'text-green-600';
-      case 'medium': return 'text-yellow-600';
-      case 'low': return 'text-red-600';
-      default: return 'text-gray-600';
-    }
+  const getDaysColor = (days: number) => {
+    if (days < 0) return 'text-red-600';      // Overdue (negative days)
+    if (days <= 3) return 'text-orange-600'; // Due very soon
+    if (days <= 7) return 'text-yellow-600'; // Due soon
+    return 'text-green-600';                  // Due later
+  };
+
+  const formatDays = (days: number) => {
+    if (days === 0) return '0';
+    if (days < 0) return `${Math.abs(days)}`; // Show positive number for overdue
+    return `${days}`;
   };
 
   return (
@@ -125,17 +129,26 @@ const ClientPaymentRow: React.FC<ClientPaymentRowProps> = ({ payment, onUpdate, 
       <td className="px-4 py-3 text-center border-r border-gray-200">
         {isEditing ? (
           <select
-            value={editedConfidence}
-            onChange={(e) => setEditedConfidence(e.target.value as ClientPayment['confidence'])}
+            value={editedDaysUntilDue}
+            onChange={(e) => setEditedDaysUntilDue(Number(e.target.value))}
             className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
+            <option value="-30">-30 (30 days overdue)</option>
+            <option value="-14">-14 (14 days overdue)</option>
+            <option value="-7">-7 (1 week overdue)</option>
+            <option value="-3">-3 (3 days overdue)</option>
+            <option value="-1">-1 (1 day overdue)</option>
+            <option value="0">0 (Due today)</option>
+            <option value="1">1 (Due tomorrow)</option>
+            <option value="3">3 (Due in 3 days)</option>
+            <option value="7">7 (Due in 1 week)</option>
+            <option value="14">14 (Due in 2 weeks)</option>
+            <option value="30">30 (Due in 1 month)</option>
+            <option value="60">60 (Due in 2 months)</option>
           </select>
         ) : (
-          <span className={`text-sm font-medium ${getConfidenceColor(payment.confidence)}`}>
-            {payment.confidence}
+          <span className={`text-sm font-medium ${getDaysColor(payment.daysUntilDue)}`}>
+            {formatDays(payment.daysUntilDue)}
           </span>
         )}
       </td>
@@ -502,7 +515,7 @@ const ClientPayments: React.FC = () => {
                   Status
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
-                  Confidence
+                  Days Until Due
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
                   Notes
@@ -529,7 +542,15 @@ const ClientPayments: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                payments.map(payment => (
+                payments
+                  .sort((a, b) => {
+                    // Sort by days until due (overdue first), then by expected payment date
+                    if (a.daysUntilDue !== b.daysUntilDue) {
+                      return a.daysUntilDue - b.daysUntilDue;
+                    }
+                    return a.expectedPaymentDate.getTime() - b.expectedPaymentDate.getTime();
+                  })
+                  .map(payment => (
                   <ClientPaymentRow
                     key={payment.id}
                     payment={payment}

@@ -232,7 +232,7 @@ class ClientPaymentService {
             originalDueDate: new Date(invoice.due_date),
             expectedPaymentDate: new Date(invoice.due_date), // Default to due date, user can adjust
             status: this.mapCampfireStatusToClientPaymentStatus(invoice.status, invoice.past_due_days),
-            confidence: this.calculateConfidence(invoice),
+            daysUntilDue: this.calculateDaysUntilDue(new Date(invoice.due_date)),
             description: invoice.contract_name,
             paymentTerms: invoice.terms,
             isImported: true,
@@ -296,24 +296,12 @@ class ClientPaymentService {
   }
 
   /**
-   * Calculate confidence level based on invoice characteristics
+   * Calculate days until due
    */
-  private calculateConfidence(invoice: CampfireInvoice): ClientPayment['confidence'] {
-    const pastDueDays = invoice.past_due_days || 0;
-    const amount = invoice.amount_due;
-    
-    // High confidence: Not past due, standard terms, reasonable amount
-    if (pastDueDays <= 0 && amount < 100000) {
-      return 'high';
-    }
-    
-    // Low confidence: Very past due or very large amounts
-    if (pastDueDays > 30 || amount > 500000) {
-      return 'low';
-    }
-    
-    // Medium confidence: Everything else
-    return 'medium';
+  private calculateDaysUntilDue(dueDate: Date): number {
+    const today = new Date();
+    const timeDiff = dueDate.getTime() - today.getTime();
+    return Math.ceil(timeDiff / (1000 * 3600 * 24));
   }
 
   /**

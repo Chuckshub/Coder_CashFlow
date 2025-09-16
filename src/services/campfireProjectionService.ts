@@ -38,8 +38,8 @@ class CampfireProjectionService {
           const totalAmount = clientInvoices.reduce((sum, inv) => sum + inv.amount_due, 0);
           const invoiceNumbers = clientInvoices.map(inv => inv.invoice_number);
           
-          // Determine confidence based on invoice status and age
-          const confidence = this.calculateConfidence(clientInvoices);
+          // Determine days until due date (negative for overdue)
+          const daysUntilDue = this.calculateDaysUntilDue(clientInvoices);
           
           projections.push({
             weekNumber,
@@ -49,15 +49,22 @@ class CampfireProjectionService {
             clientName,
             invoiceNumbers,
             originalDueDate: new Date(clientInvoices[0].due_date), // Use first invoice's due date
-            confidence,
+            daysUntilDue,
             invoiceCount: clientInvoices.length
           });
         });
       }
     });
     
-    // Sort projections by week number
-    projections.sort((a, b) => a.weekNumber - b.weekNumber);
+    // Sort projections by days until due (overdue first), then by week number
+    projections.sort((a, b) => {
+      // First sort by days until due (overdue/negative first)
+      if (a.daysUntilDue !== b.daysUntilDue) {
+        return a.daysUntilDue - b.daysUntilDue;
+      }
+      // Then by week number as secondary sort
+      return a.weekNumber - b.weekNumber;
+    });
     
     console.log(`✅ Generated ${projections.length} client payment projections across ${weekDates.length} weeks`);
     
@@ -82,27 +89,27 @@ class CampfireProjectionService {
   }
   
   /**
-   * Calculate confidence level based on invoice characteristics
+   * Calculate days until due date (negative for overdue)
    */
-  private calculateConfidence(invoices: CampfireInvoice[]): 'high' | 'medium' | 'low' {
-    // Calculate average days past due across all invoices
-    const totalPastDueDays = invoices.reduce((sum, inv) => {
-      return sum + (inv.past_due_days || 0);
-    }, 0);
-    const avgPastDueDays = totalPastDueDays / invoices.length;
+  private calculateDaysUntilDue(invoices: CampfireInvoice[]): number {
+    if (invoices.length === 0) return 0;
     
-    // Check invoice status distribution
-    const openInvoices = invoices.filter(inv => inv.status === 'open').length;
-    const pastDueInvoices = invoices.filter(inv => inv.status === 'past_due').length;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0); // Start of today
     
-    // Confidence scoring logic
-    if (pastDueInvoices === 0 && avgPastDueDays === 0) {
-      return 'high'; // All invoices are current
-    } else if (pastDueInvoices <= invoices.length * 0.3 && avgPastDueDays < 10) {
-      return 'medium'; // Less than 30% past due, average less than 10 days
-    } else {
-      return 'low'; // High proportion past due or significantly overdue
-    }
+    // Use the earliest due date if multiple invoices
+    const earliestDueDate = invoices.reduce((earliest, invoice) => {
+      const dueDate = new Date(invoice.due_date);
+      return dueDate < earliest ? dueDate : earliest;
+    }, new Date(invoices[0].due_date));
+    
+    earliestDueDate.setHours(0, 0, 0, 0);
+    
+    // Calculate days difference
+    const timeDiff = earliestDueDate.getTime() - now.getTime();
+    const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+    
+    return daysDiff;
   }
   
   /**
@@ -145,16 +152,18 @@ class CampfireProjectionService {
       
       switch (scenario) {
         case 'optimistic':
-          multiplier = projection.confidence === 'high' ? 1.0 :
-                      projection.confidence === 'medium' ? 0.95 : 0.85;
+          multiplier = projection.daysUntilDue >= 0 ? 1.0 :    // Not overdue
+                      projection.daysUntilDue >= -7 ? 0.95 : 0.85;  // 1 week or less overdue vs more
           break;
         case 'realistic':
-          multiplier = projection.confidence === 'high' ? 0.95 :
-                      projection.confidence === 'medium' ? 0.80 : 0.60;
+          multiplier = projection.daysUntilDue >= 7 ? 0.95 :   // Due in a week+
+                      projection.daysUntilDue >= 0 ? 0.90 :    // Due soon but not overdue
+                      projection.daysUntilDue >= -7 ? 0.70 : 0.50;  // Recently overdue vs very overdue
           break;
         case 'pessimistic':
-          multiplier = projection.confidence === 'high' ? 0.85 :
-                      projection.confidence === 'medium' ? 0.65 : 0.40;
+          multiplier = projection.daysUntilDue >= 7 ? 0.85 :   // Due in a week+
+                      projection.daysUntilDue >= 0 ? 0.75 :    // Due soon but not overdue
+                      projection.daysUntilDue >= -7 ? 0.50 : 0.30;  // Recently overdue vs very overdue
           break;
       }
       
@@ -173,21 +182,24 @@ class CampfireProjectionService {
     const clientCount = new Set(projections.map(p => p.clientName)).size;
     const invoiceCount = projections.reduce((sum, p) => sum + p.invoiceCount, 0);
     
-    const confidenceBreakdown = {
-      high: projections.filter(p => p.confidence === 'high').length,
-      medium: projections.filter(p => p.confidence === 'medium').length,
-      low: projections.filter(p => p.confidence === 'low').length
+    const daysBreakdown = {
+      overdue: projections.filter(p => p.daysUntilDue < 0).length,
+      dueSoon: projections.filter(p => p.daysUntilDue >= 0 && p.daysUntilDue <= 7).length,
+      dueLater: projections.filter(p => p.daysUntilDue > 7).length
     };
     
-    // Calculate weekly distribution
-    const weeklyDistribution = this.aggregateProjectionsByWeek(projections);
+    const weeklyDistribution = projections.reduce((acc, p) => {
+      const weekKey = `Week ${p.weekNumber}`;
+      acc[weekKey] = (acc[weekKey] || 0) + p.expectedAmount;
+      return acc;
+    }, {} as Record<string, number>);
     
     return {
       totalAmount,
       clientCount,
       invoiceCount,
       projectionCount: projections.length,
-      confidenceBreakdown,
+      daysBreakdown,
       weeklyDistribution,
       lastGenerated: new Date()
     };

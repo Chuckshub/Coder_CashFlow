@@ -328,7 +328,7 @@ export interface ClientPaymentProjection {
   clientName: string;
   invoiceNumbers: string[];
   originalDueDate: Date;
-  confidence: 'high' | 'medium' | 'low';
+  daysUntilDue: number; // Negative for overdue, positive for future due dates
   invoiceCount: number;
 }
 
@@ -356,7 +356,7 @@ export interface ClientPayment {
   originalDueDate: Date;
   expectedPaymentDate: Date; // User can modify this
   status: 'pending' | 'partially_paid' | 'paid' | 'overdue';
-  confidence: 'high' | 'medium' | 'low';
+  daysUntilDue: number; // Negative for overdue, positive for future due dates
   description?: string;
   notes?: string;
   paymentTerms?: string;
