@@ -259,11 +259,11 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
                   
                   {/* Bank Balance Input Cell */}
                   <td className="px-4 py-3 text-center">
-                    <div className="flex flex-col items-center space-y-1">
+                    <div className="flex flex-col items-center space-y-2">
                       <input
                         type="number"
                         step="0.01"
-                        placeholder="Enter actual balance"
+                        placeholder="Enter balance"
                         value={weekData.actualBankBalance || ''}
                         onChange={(e) => {
                           const value = e.target.value === '' ? null : parseFloat(e.target.value);
@@ -276,17 +276,16 @@ const CashflowTable: React.FC<CashflowTableProps> = ({
                             onBankBalanceUpdate?.(weekData.weekNumber, value);
                           }
                         }}
-                        className="w-28 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-32 px-3 py-2 text-sm font-medium text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
                       />
-                      {weekData.actualBankBalance && weekData.runningBalance && (
-                        <div className={`text-xs ${
-                          Math.abs(weekData.actualBankBalance - weekData.runningBalance) < 0.01
-                            ? 'text-green-600'
-                            : Math.abs(weekData.actualBankBalance - weekData.runningBalance) > 1000
-                            ? 'text-red-600'
-                            : 'text-yellow-600'
-                        }`}>
-                          Diff: {formatCurrency(weekData.actualBankBalance - weekData.runningBalance)}
+                      {weekData.actualBankBalance !== undefined && weekData.runningBalance && (
+                        <div className="text-xs font-medium">
+                          <div className={`${getBalanceColor(weekData.actualBankBalance - weekData.runningBalance)}`}>
+                            {Math.abs(weekData.actualBankBalance - weekData.runningBalance) < 0.01
+                              ? '✓ Match'
+                              : `${formatCurrency(weekData.actualBankBalance - weekData.runningBalance)}`
+                            }
+                          </div>
                         </div>
                       )}
                     </div>
