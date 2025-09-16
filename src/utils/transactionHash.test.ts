@@ -29,8 +29,18 @@ describe('TransactionHash with Salting', () => {
     date: new Date('2024-01-15'),
     amount: -50.25,
     description: 'Coffee Shop Purchase',
-    type: 'debit',
-    category: 'Food & Dining'
+    type: 'outflow',
+    category: 'Food & Dining',
+    balance: 1000.75,
+    originalData: {
+      Details: 'DEBIT',
+      'Posting Date': '01/15/2024',
+      Description: 'Coffee Shop Purchase',
+      Amount: -50.25,
+      Type: 'PURCHASE',
+      Balance: 1000.75,
+      'Check or Slip #': ''
+    }
   };
 
   const testTransaction2: Transaction = {
@@ -39,24 +49,48 @@ describe('TransactionHash with Salting', () => {
     date: new Date('2024-01-15'),
     amount: -50.25,
     description: 'Coffee Shop Purchase',
-    type: 'debit',
-    category: 'Food & Dining'
+    type: 'outflow',
+    category: 'Food & Dining',
+    balance: 950.50,
+    originalData: {
+      Details: 'DEBIT',
+      'Posting Date': '01/15/2024',
+      Description: 'Coffee Shop Purchase',
+      Amount: -50.25,
+      Type: 'PURCHASE',
+      Balance: 950.50,
+      'Check or Slip #': ''
+    }
   };
 
   const testTransaction3: Transaction = {
     id: 'test3',
     hash: '',
-    date: new Date('2024-01-16'),
-    amount: -30.00,
-    description: 'Different Purchase',
-    type: 'debit',
-    category: 'Food & Dining'
+    date: new Date('2024-01-16'), // Different date
+    amount: -50.25,
+    description: 'Coffee Shop Purchase',
+    type: 'outflow',
+    category: 'Food & Dining',
+    balance: 900.25,
+    originalData: {
+      Details: 'DEBIT',
+      'Posting Date': '01/16/2024',
+      Description: 'Coffee Shop Purchase',
+      Amount: -50.25,
+      Type: 'PURCHASE',
+      Balance: 900.25,
+      'Check or Slip #': ''
+    }
   };
 
   const testRawTransaction: RawTransaction = {
+    Details: 'DEBIT',
     'Posting Date': '2024-01-15',
-    'Amount': -50.25,
-    'Description': 'Coffee Shop Purchase'
+    Description: 'Coffee Shop Purchase',
+    Amount: -50.25,
+    Type: 'PURCHASE',
+    Balance: 1000.00,
+    'Check or Slip #': ''
   };
 
   describe('Hash Generation', () => {
