@@ -15,10 +15,9 @@ import UserHeader from './components/common/UserHeader';
 import FirebaseStatus from './components/common/FirebaseStatus';
 import { testFirebaseConnection } from './utils/firebaseTest';
 import EstimateCreatorModal from './components/common/EstimateCreatorModal';
-import CampfireTest from './components/CampfireTest/CampfireTest';
 import ClientPayments from './components/ClientPayments/ClientPayments';
 
-type ActiveView = 'upload' | 'cashflow' | 'dataManagement' | 'campfireTest' | 'clientPayments';
+type ActiveView = 'upload' | 'cashflow' | 'dataManagement' | 'campfireData';
 
 // Calculate weekly cashflows from transactions and estimates
 function calculateWeeklyCashflows(
@@ -554,24 +553,14 @@ function DatabaseApp() {
                 Data Management
               </button>
               <button
-                onClick={() => setActiveView('campfireTest')}
+                onClick={() => setActiveView('campfireData')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeView === 'campfireTest'
+                  activeView === 'campfireData'
                     ? 'bg-blue-100 text-blue-700'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                🔥 Campfire Test
-              </button>
-              <button
-                onClick={() => setActiveView('clientPayments')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeView === 'clientPayments'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                💰 Client Payments
+                🔥 Campfire Invoice Data
               </button>
             </nav>
             
@@ -780,15 +769,8 @@ function DatabaseApp() {
           </div>
         )}
 
-        {/* Campfire Test View */}
-        {activeView === 'campfireTest' && (
-          <div className="px-4 sm:px-0">
-            <CampfireTest />
-          </div>
-        )}
-
-        {/* Client Payments View */}
-        {activeView === 'clientPayments' && (
+        {/* Campfire Invoice Data View */}
+        {activeView === 'campfireData' && (
           <div className="px-4 sm:px-0">
             <ClientPayments />
           </div>

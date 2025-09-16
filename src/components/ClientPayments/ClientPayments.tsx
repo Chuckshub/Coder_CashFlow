@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { ClientPayment, CampfireImportSummary, ImportStatus } from '../../types';
 import { getClientPaymentService } from '../../services/clientPaymentService';
 import { getCampfireService } from '../../services/campfireService';
+import { ClientPayment, CampfireInvoice, CampfireImportSummary, ImportStatus } from '../../types';
 import { formatCurrency } from '../../utils/dateUtils';
 
 interface ClientPaymentRowProps {
@@ -205,6 +205,12 @@ const ClientPayments: React.FC = () => {
     message: ''
   });
   const [lastImportSummary, setLastImportSummary] = useState<CampfireImportSummary | null>(null);
+  
+  // Connection test state
+  const [connectionTest, setConnectionTest] = useState<{
+    testing: boolean;
+    result: { success: boolean; message: string; invoiceCount?: number } | null;
+  }>({ testing: false, result: null });
   const [error, setError] = useState<string | null>(null);
 
   const clientPaymentService = getClientPaymentService(currentUser?.uid || '');
@@ -304,6 +310,26 @@ const ClientPayments: React.FC = () => {
     }
   };
 
+  const handleConnectionTest = async () => {
+    console.log('🧪 Testing Campfire API connection...');
+    setConnectionTest({ testing: true, result: null });
+    
+    try {
+      const result = await campfireService.testConnection();
+      console.log('📄 Connection test result:', result);
+      setConnectionTest({ testing: false, result });
+    } catch (error) {
+      console.error('💥 Connection test failed:', error);
+      setConnectionTest({ 
+        testing: false, 
+        result: { 
+          success: false, 
+          message: error instanceof Error ? error.message : 'Unknown error' 
+        } 
+      });
+    }
+  };
+
   const activePayments = payments.filter(p => 
     p.status === 'pending' || p.status === 'overdue' || p.status === 'partially_paid'
   );
@@ -323,9 +349,9 @@ const ClientPayments: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">Client Payments</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Campfire Invoice Data</h2>
           <p className="text-sm text-gray-600 mt-1">
-            Manage expected client payments and import from Campfire
+            Manage invoice projections and import data from Campfire API
           </p>
         </div>
         
@@ -523,6 +549,51 @@ const ClientPayments: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Connection Test Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-medium text-gray-900">API Connection</h3>
+          <button
+            onClick={handleConnectionTest}
+            disabled={connectionTest.testing}
+            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+          >
+            {connectionTest.testing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Testing...
+              </>
+            ) : (
+              <>
+                🧪 Test Connection
+              </>
+            )}
+          </button>
+        </div>
+        
+        {connectionTest.result && (
+          <div className={`p-3 rounded-md ${
+            connectionTest.result.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+          }`}>
+            <div className="flex items-center">
+              <span className={`text-sm font-medium ${
+                connectionTest.result.success ? 'text-green-800' : 'text-red-800'
+              }`}>
+                {connectionTest.result.success ? '✅ Success' : '❌ Failed'}
+              </span>
+            </div>
+            <p className={`text-sm mt-1 ${
+              connectionTest.result.success ? 'text-green-700' : 'text-red-700'
+            }`}>
+              {connectionTest.result.message}
+              {connectionTest.result.success && connectionTest.result.invoiceCount && (
+                <span> | Found {connectionTest.result.invoiceCount} total invoices</span>
+              )}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
