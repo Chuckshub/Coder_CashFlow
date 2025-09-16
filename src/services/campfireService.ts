@@ -31,6 +31,11 @@ class CampfireService {
    * Check if Campfire integration is configured
    */
   isConfigured(): boolean {
+    if (this.useProxy) {
+      // In proxy mode, configuration is handled server-side
+      return true;
+    }
+    // In direct API mode, need client-side API key
     return !!this.apiKey;
   }
 
