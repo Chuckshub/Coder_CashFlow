@@ -171,34 +171,35 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
   }, [transactions]);
 
   // Handle individual transaction deletion
-  const handleDeleteTransaction = async (transactionId: string) => {
+  const handleDeleteTransaction = async (transactionHash: string) => {
     if (!currentUser) return;
 
-    setDeleting(prev => new Set(prev).add(transactionId));
+    setDeleting(prev => new Set(prev).add(transactionHash));
     try {
       const firebaseService = getSimpleFirebaseService(currentUser.uid);
-      const result = await firebaseService.deleteTransaction(transactionId);
+      const result = await firebaseService.deleteTransaction(transactionHash);
       
       if (!result.success) {
         throw new Error(result.error || 'Failed to delete transaction');
       }
       
-      // Remove from local state
-      setTransactions(prev => prev.filter(t => t.id !== transactionId));
+      // Remove from local state using hash to find the transaction
+      setTransactions(prev => prev.filter(t => !t.hash || t.hash !== transactionHash));
       setSelectedTransactions(prev => {
         const newSet = new Set(prev);
-        newSet.delete(transactionId);
+        // Remove by hash, but selected transactions are stored by hash now
+        newSet.delete(transactionHash);
         return newSet;
       });
       
-      console.log(`✅ Deleted transaction: ${transactionId}`);
+      console.log(`✅ Deleted transaction: ${transactionHash}`);
     } catch (err) {
       console.error('Error deleting transaction:', err);
       setError(`Failed to delete transaction: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setDeleting(prev => {
         const newSet = new Set(prev);
-        newSet.delete(transactionId);
+        newSet.delete(transactionHash);
         return newSet;
       });
       setShowDeleteConfirm(null);
@@ -209,16 +210,16 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
   const handleBulkDelete = async () => {
     if (!currentUser || selectedTransactions.size === 0) return;
 
-    const transactionIds = Array.from(selectedTransactions);
-    console.log(`🗑️ Bulk deleting ${transactionIds.length} transactions`);
+    const transactionHashes = Array.from(selectedTransactions);
+    console.log(`🗑️ Bulk deleting ${transactionHashes.length} transactions`);
 
-    setDeleting(new Set(transactionIds));
+    setDeleting(new Set(transactionHashes));
     try {
       const firebaseService = getSimpleFirebaseService(currentUser.uid);
       
-      // Delete transactions in parallel
+      // Delete transactions in parallel using hashes
       const results = await Promise.all(
-        transactionIds.map(id => firebaseService.deleteTransaction(id))
+        transactionHashes.map(hash => firebaseService.deleteTransaction(hash))
       );
       
       // Check for any failures
@@ -228,12 +229,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
         setError(`Failed to delete ${failures.length} transactions`);
       }
       
-      // Remove successfully deleted transactions from local state
-      const successfulIds = transactionIds.filter((id, index) => results[index].success);
-      setTransactions(prev => prev.filter(t => !successfulIds.includes(t.id)));
+      // Remove successfully deleted transactions from local state using hashes
+      const successfulHashes = transactionHashes.filter((hash, index) => results[index].success);
+      setTransactions(prev => prev.filter(t => !t.hash || !successfulHashes.includes(t.hash)));
       setSelectedTransactions(new Set());
       
-      console.log(`✅ Bulk deleted ${successfulIds.length} transactions`);
+      console.log(`✅ Bulk deleted ${successfulHashes.length} transactions`);
     } catch (err) {
       console.error('Error bulk deleting transactions:', err);
       setError(`Failed to delete transactions: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -243,13 +244,13 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
   };
 
   // Toggle transaction selection
-  const toggleTransactionSelection = (transactionId: string) => {
+  const toggleTransactionSelection = (transactionHash: string) => {
     setSelectedTransactions(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(transactionId)) {
-        newSet.delete(transactionId);
+      if (newSet.has(transactionHash)) {
+        newSet.delete(transactionHash);
       } else {
-        newSet.add(transactionId);
+        newSet.add(transactionHash);
       }
       return newSet;
     });
@@ -257,8 +258,8 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
 
   // Select all filtered transactions
   const selectAllFiltered = () => {
-    const allIds = new Set(filteredTransactions.map(t => t.id));
-    setSelectedTransactions(allIds);
+    const allHashes = new Set(filteredTransactions.filter(t => t.hash).map(t => t.hash!));
+    setSelectedTransactions(allHashes);
   };
 
   // Clear all selections
@@ -499,13 +500,13 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
                 </tr>
               ) : (
                 filteredTransactions.map((transaction) => {
-                  const isSelected = selectedTransactions.has(transaction.id);
+                  const isSelected = transaction.hash ? selectedTransactions.has(transaction.hash) : false;
                   const isDuplicate = duplicateTransactionIds.has(transaction.id);
-                  const isDeleting = deleting.has(transaction.id);
+                  const isDeleting = transaction.hash ? deleting.has(transaction.hash) : false;
                   
                   return (
                     <tr
-                      key={transaction.id}
+                      key={transaction.hash || transaction.id}
                       className={`hover:bg-gray-50 ${
                         isDuplicate ? 'bg-amber-50 border-l-4 border-amber-400' : ''
                       } ${
@@ -518,8 +519,8 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => toggleTransactionSelection(transaction.id)}
-                          disabled={isDeleting}
+                          onChange={() => transaction.hash && toggleTransactionSelection(transaction.hash)}
+                          disabled={isDeleting || !transaction.hash}
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                         />
                       </td>
@@ -546,8 +547,8 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
-                          onClick={() => setShowDeleteConfirm(transaction.id)}
-                          disabled={isDeleting}
+                          onClick={() => transaction.hash && setShowDeleteConfirm(transaction.hash)}
+                          disabled={isDeleting || !transaction.hash}
                           className="text-red-600 hover:text-red-900 disabled:opacity-50"
                         >
                           {isDeleting ? '⏳' : '🗑️'}
@@ -591,7 +592,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
                   Are you sure you want to delete this transaction? This action cannot be undone.
                 </p>
                 {(() => {
-                  const trans = transactions.find(t => t.id === showDeleteConfirm);
+                  const trans = transactions.find(t => t.hash === showDeleteConfirm);
                   return trans ? (
                     <div className="mt-3 p-3 bg-gray-50 rounded text-left">
                       <div className="text-sm font-medium">{trans.date.toLocaleDateString()}</div>
