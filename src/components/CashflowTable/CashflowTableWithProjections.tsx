@@ -13,6 +13,7 @@ import {
 } from '../../utils/dateUtils';
 import EstimateModal from '../EstimateManager/EstimateModal';
 import WeeklyDetailView from './WeeklyDetailView';
+import { NumericFormat } from 'react-number-format';
 
 interface CashflowTableWithProjectionsProps {
   weeklyCashflows: WeeklyCashflowWithProjections[];
@@ -333,18 +334,19 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                     {/* Bank Balance Input Column */}
                     <td className="px-4 py-3 text-center">
                       <div className="flex flex-col items-center space-y-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="Enter balance"
+                        <NumericFormat
+                          thousandSeparator=","
+                          prefix="$"
+                          placeholder="$0"
                           value={weekData.actualBankBalance || ''}
-                          onChange={(e) => {
-                            const value = e.target.value === '' ? null : parseFloat(e.target.value);
+                          onValueChange={(values) => {
+                            const value = values.value === '' ? null : parseFloat(values.value || '0');
                             if (onBankBalanceUpdate) {
                               onBankBalanceUpdate(weekData.weekNumber, value);
                             }
                           }}
                           className="w-32 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          allowNegative={true}
                         />
                         {weekData.actualBankBalance && (
                           <div className={`text-xs ${getBalanceColor(weekData.actualBankBalance)}`}>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { NumericFormat } from 'react-number-format';
 import { formatCurrency } from '../../utils/dateUtils';
 
 interface BeginningBalanceEditorProps {
@@ -58,14 +59,6 @@ const BeginningBalanceEditor: React.FC<BeginningBalanceEditorProps> = ({
     setError(null);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSave();
-    } else if (e.key === 'Escape') {
-      handleCancel();
-    }
-  };
-
   const handleToggleLock = () => {
     if (isEditing) {
       handleCancel();
@@ -111,15 +104,22 @@ const BeginningBalanceEditor: React.FC<BeginningBalanceEditorProps> = ({
           {isEditing ? (
             <div className="flex items-center space-x-2">
               <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                <input
-                  type="text"
+                <NumericFormat
                   value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  className="pl-8 pr-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0.00"
+                  onValueChange={(values) => setEditValue(values.value || '')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSave();
+                    } else if (e.key === 'Escape') {
+                      handleCancel();
+                    }
+                  }}
+                  thousandSeparator=","
+                  prefix="$"
+                  placeholder="$0"
+                  className="px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   autoFocus
+                  allowNegative={true}
                 />
               </div>
               <button
