@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { Transaction, Estimate, WeeklyCashflow, BankBalance, ClientPayment, WeeklyCashflowWithProjections, RawTransaction } from './types';
-import { formatCurrency, generate13Weeks } from './utils/dateUtils';
+import { Transaction, Estimate, WeeklyCashflow, ClientPayment, WeeklyCashflowWithProjections, RawTransaction } from './types';
+import { generate13Weeks } from './utils/dateUtils';
 import { processRawTransactionsSimple, PipelineProgress, PipelineResult } from './services/csvToFirebasePipelineSimple';
 import { getSimpleDataLoader, DataLoadingState } from './services/dataLoaderSimple';
 import { getSimpleFirebaseService } from './services/firebaseServiceSimple';
@@ -9,17 +9,16 @@ import { v4 as uuidv4 } from 'uuid';
 import CashflowTableWithProjections from './components/CashflowTable/CashflowTableWithProjections';
 import CSVUpload from './components/DataImport/CSVUpload';
 import DataManagement from './components/DataManagement/DataManagement';
-import AuthWrapper from './components/Auth/AuthWrapper';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import UserHeader from './components/common/UserHeader';
 import FirebaseStatus from './components/common/FirebaseStatus';
-import { testFirebaseConnection } from './utils/firebaseTest';
 import EstimateCreatorModal from './components/common/EstimateCreatorModal';
 import ClientPayments from './components/ClientPayments/ClientPayments';
 import { calculateWeeklyCashflowsWithCampfireProjections } from './services/cashflowCalculationService';
 import { getClientPaymentService } from './services/clientPaymentService';
-import { getCampfireService } from './services/campfireService';
-// Removed CampfireTest import
+import { getBeginningBalanceService } from './services/beginningBalanceService';
+import BeginningBalanceEditor from './components/BeginningBalance/BeginningBalanceEditor';
+// Removed unused imports
 
 type ActiveView = 'upload' | 'cashflow' | 'dataManagement' | 'campfireData';
 
@@ -121,6 +120,9 @@ function DatabaseApp() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [clientPayments, setClientPayments] = useState<ClientPayment[]>([]);
+  const [beginningBalance, setBeginningBalance] = useState<number>(0);
+  const [isBalanceLocked, setIsBalanceLocked] = useState<boolean>(false);
+  const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -235,6 +237,9 @@ function DatabaseApp() {
     // Load client payments
     loadClientPayments();
     
+    // Load beginning balance
+    loadBeginningBalance();
+    
     // Load bank balances
     const loadBankBalances = async () => {
       try {
@@ -278,7 +283,7 @@ function DatabaseApp() {
       const cashflowsWithProjections = calculateWeeklyCashflowsWithCampfireProjections(
         transactions,
         estimates, 
-        0,
+        beginningBalance,
         mockInvoices
       );
       
@@ -290,7 +295,7 @@ function DatabaseApp() {
     } catch (error) {
       console.error('Error calculating cashflows with Campfire projections:', error);
       // Fallback to basic calculation
-      const baseWeeklyCashflows = calculateWeeklyCashflows(transactions, estimates, 0);
+      const baseWeeklyCashflows = calculateWeeklyCashflows(transactions, estimates, beginningBalance);
       return baseWeeklyCashflows.map(weekData => ({
         ...weekData,
         actualBankBalance: bankBalances.get(weekData.weekNumber) || undefined,
@@ -298,7 +303,7 @@ function DatabaseApp() {
         clientPaymentProjections: []
       }));
     }
-  }, [transactions, estimates, bankBalances, clientPayments]);
+  }, [transactions, estimates, bankBalances, clientPayments, beginningBalance]);
 
   // Handle CSV data parsing using simplified pipeline
   const handleCSVDataParsed = useCallback(async (rawTransactions: RawTransaction[]) => {
@@ -548,6 +553,72 @@ function DatabaseApp() {
     }
   }, [currentUser?.uid]);
 
+  // Load beginning balance from Firebase
+  const loadBeginningBalance = useCallback(async () => {
+    if (!currentUser?.uid) return;
+    
+    setIsLoadingBalance(true);
+    console.log('💰 Loading beginning balance from Firebase...');
+    
+    try {
+      const balanceService = getBeginningBalanceService(currentUser.uid);
+      const balanceData = await balanceService.getBeginningBalance();
+      
+      if (balanceData) {
+        setBeginningBalance(balanceData.balance);
+        setIsBalanceLocked(balanceData.isLocked);
+        console.log('✅ Loaded beginning balance:', balanceData.balance, 'locked:', balanceData.isLocked);
+      } else {
+        // Initialize default balance
+        const defaultBalance = await balanceService.initializeDefaultBalance();
+        setBeginningBalance(defaultBalance.balance);
+        setIsBalanceLocked(defaultBalance.isLocked);
+        console.log('✅ Initialized default beginning balance');
+      }
+    } catch (error: any) {
+      console.error('💥 Error loading beginning balance:', error);
+      setError(`Failed to load beginning balance: ${error.message}`);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  }, [currentUser?.uid]);
+
+  // Update beginning balance
+  const updateBeginningBalance = useCallback(async (newBalance: number) => {
+    if (!currentUser?.uid) return;
+    
+    try {
+      setIsLoadingBalance(true);
+      const balanceService = getBeginningBalanceService(currentUser.uid);
+      await balanceService.updateBeginningBalance(newBalance, isBalanceLocked);
+      setBeginningBalance(newBalance);
+      console.log('✅ Updated beginning balance to:', newBalance);
+    } catch (error: any) {
+      console.error('💥 Error updating beginning balance:', error);
+      setError(`Failed to update beginning balance: ${error.message}`);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  }, [currentUser?.uid, isBalanceLocked]);
+
+  // Toggle balance lock
+  const toggleBalanceLock = useCallback(async (locked: boolean) => {
+    if (!currentUser?.uid) return;
+    
+    try {
+      setIsLoadingBalance(true);
+      const balanceService = getBeginningBalanceService(currentUser.uid);
+      await balanceService.updateBeginningBalance(beginningBalance, locked);
+      setIsBalanceLocked(locked);
+      console.log('✅ Toggled balance lock to:', locked);
+    } catch (error: any) {
+      console.error('💥 Error toggling balance lock:', error);
+      setError(`Failed to update lock status: ${error.message}`);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  }, [currentUser?.uid, beginningBalance]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -784,6 +855,17 @@ function DatabaseApp() {
         {/* Cashflow Table View */}
         {activeView === 'cashflow' && (
           <div className="px-4 sm:px-0">
+            {/* Beginning Balance Editor */}
+            <div className="mb-6">
+              <BeginningBalanceEditor
+                currentBalance={beginningBalance}
+                isLocked={isBalanceLocked}
+                onUpdateBalance={updateBeginningBalance}
+                onToggleLock={toggleBalanceLock}
+                isLoading={isLoadingBalance}
+              />
+            </div>
+            
             {weeklyCashflows.length > 0 ? (
               <CashflowTableWithProjections
                 weeklyCashflows={weeklyCashflows}

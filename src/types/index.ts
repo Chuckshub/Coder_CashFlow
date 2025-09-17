@@ -383,3 +383,14 @@ export interface ImportStatus {
   message: string;
   lastImport?: Date;
 }
+
+// Beginning Balance Management
+export interface BeginningBalance {
+  id: string;
+  userId: string;
+  balance: number;
+  isLocked: boolean;
+  lastModified: Date;
+  lastModifiedBy: string;
+  notes?: string;
+}
