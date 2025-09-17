@@ -837,14 +837,6 @@ function DatabaseApp() {
           <div className="px-4 sm:px-0">
             <FirebaseStatus showDetails={true} />
             
-            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <h3 className="text-sm font-medium text-green-800 mb-1">🆕 Simplified Architecture</h3>
-              <p className="text-sm text-green-700">
-                Much cleaner Firebase structure: users/&#123;userId&#125;/transactions/&#123;hash&#125;<br/>
-                No sessions, no complexity - just user isolation + hash-based deduplication!
-              </p>
-            </div>
-            
             <CSVUpload
               onDataParsed={handleCSVDataParsed}
               onError={handleCSVError}
