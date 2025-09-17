@@ -303,7 +303,7 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                         <div className={`text-sm font-medium ${getCurrencyColor(weekData.actualInflow)}`}>
                           {formatCurrency(weekData.actualInflow)}
                         </div>
-                        {weekData.estimatedInflow > 0 && (
+                        {weekData.estimatedInflow > 0 ? (
                           <button
                             onClick={() => openEstimatesListModal(
                               weekData.weekNumber, 
@@ -314,6 +314,14 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                             title={`Click to manage ${weekData.estimates.filter(est => est.type === 'inflow').length} inflow estimate(s)`}
                           >
                             Est: {formatCurrency(weekData.estimatedInflow)}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openEstimateModal(weekData.weekNumber, 'inflow')}
+                            className="text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded mt-1 cursor-pointer transition-colors"
+                            title="Click to add an inflow estimate for this week"
+                          >
+                            + Add Estimate
                           </button>
                         )}
                       </div>
@@ -355,7 +363,7 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                       <div className={`text-sm font-medium ${getCurrencyColor(-weekData.actualOutflow)}`}>
                         {formatCurrency(weekData.actualOutflow)}
                       </div>
-                      {weekData.estimatedOutflow > 0 && (
+                      {weekData.estimatedOutflow > 0 ? (
                         <button
                           onClick={() => openEstimatesListModal(
                             weekData.weekNumber, 
@@ -366,6 +374,14 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                           title={`Click to manage ${weekData.estimates.filter(est => est.type === 'outflow').length} outflow estimate(s)`}
                         >
                           Est: {formatCurrency(weekData.estimatedOutflow)}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => openEstimateModal(weekData.weekNumber, 'outflow')}
+                          className="text-xs text-red-600 hover:text-red-800 hover:bg-red-50 px-2 py-1 rounded mt-1 cursor-pointer transition-colors"
+                          title="Click to add an outflow estimate for this week"
+                        >
+                          + Add Estimate
                         </button>
                       )}
                     </td>
