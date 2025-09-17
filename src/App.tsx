@@ -864,6 +864,9 @@ function DatabaseApp() {
                 onRefreshData={refreshAllData}
                 onBankBalanceUpdate={handleBankBalanceUpdate}
                 showClientProjections={true}
+                onAddEstimate={addEstimate}
+                onUpdateEstimate={updateEstimate}
+                onDeleteEstimate={deleteEstimate}
               />
             ) : (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">

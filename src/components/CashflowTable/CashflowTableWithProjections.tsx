@@ -9,13 +9,20 @@ interface CashflowTableWithProjectionsProps {
   onRefreshData?: () => void;
   onBankBalanceUpdate?: (weekNumber: number, actualBalance: number) => void;
   showClientProjections?: boolean;
+  // Estimate CRUD operations
+  onAddEstimate?: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onUpdateEstimate?: (id: string, estimate: Partial<Estimate>) => void;
+  onDeleteEstimate?: (id: string) => void;
 }
 
 const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> = ({ 
   weeklyCashflows, 
   onRefreshData,
   onBankBalanceUpdate,
-  showClientProjections = true
+  showClientProjections = true,
+  onAddEstimate,
+  onUpdateEstimate,
+  onDeleteEstimate
 }) => {
   const [modalState, setModalState] = useState<{
     isOpen: boolean;
@@ -60,8 +67,32 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
 
   const handleEstimateSubmit = (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => {
     console.log('💾 Estimate submitted:', estimate);
-    // TODO: Implement estimate save logic
+    
+    if (modalState.editingEstimate) {
+      // Update existing estimate
+      if (onUpdateEstimate) {
+        onUpdateEstimate(modalState.editingEstimate.id, estimate);
+      }
+    } else {
+      // Create new estimate
+      if (onAddEstimate) {
+        onAddEstimate({
+          ...estimate,
+          weekNumber: modalState.weekNumber,
+          type: modalState.type!
+        });
+      }
+    }
+    
     closeModal();
+  };
+
+  const handleEstimateDelete = () => {
+    if (modalState.editingEstimate && onDeleteEstimate) {
+      console.log('🗑️ Deleting estimate:', modalState.editingEstimate.id);
+      onDeleteEstimate(modalState.editingEstimate.id);
+      closeModal();
+    }
   };
 
   return (
@@ -162,51 +193,51 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                         </div>
                         
                         {/* Individual Inflow Estimates */}
-                        <div className="space-y-1">
+                        <div className="space-y-1 mt-1">
                           {weekData.estimates
                             .filter(est => est.type === 'inflow')
                             .map(estimate => (
                               <div
                                 key={estimate.id}
-                                className="cursor-pointer hover:bg-blue-50 rounded px-2 py-1 -mx-2 border border-transparent hover:border-blue-200 transition-colors"
+                                className="cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5 border border-transparent hover:border-blue-200 transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   openEstimateModal(weekData.weekNumber, 'inflow', estimate);
                                 }}
                                 title={`Click to edit: ${estimate.description}`}
                               >
-                                <div className="text-xs text-blue-600 font-medium">
-                                  Est: {formatCurrency(estimate.amount)}
-                                </div>
-                                <div className="text-xs text-gray-500 truncate">
-                                  {estimate.description}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-blue-600 font-medium truncate flex-1 mr-1">
+                                    {estimate.description}
+                                  </span>
+                                  <span className="text-xs text-blue-600 font-medium whitespace-nowrap">
+                                    {formatCurrency(estimate.amount)}
+                                  </span>
                                 </div>
                               </div>
                             ))
                           }
                           
                           {/* Add New Estimate Button */}
-                          <div
-                            className="cursor-pointer hover:bg-gray-50 rounded px-2 py-1 -mx-2 border border-dashed border-gray-300 hover:border-gray-400 transition-colors"
-                            onClick={() => openEstimateModal(weekData.weekNumber, 'inflow')}
-                            title="Click to add new inflow estimate"
-                          >
-                            <div className="text-xs text-gray-400 text-center">
-                              + Add Estimate
+                          {weekData.estimates.filter(est => est.type === 'inflow').length < 3 && (
+                            <div
+                              className="cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5 border border-dashed border-gray-300 hover:border-gray-400 transition-colors"
+                              onClick={() => openEstimateModal(weekData.weekNumber, 'inflow')}
+                              title="Click to add new inflow estimate"
+                            >
+                              <div className="text-xs text-gray-400 text-center">
+                                + Add Estimate
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                         
                         {/* Client Payment Projections */}
                         {hasProjections && (
                           <div className="relative mt-3 pt-2 border-t border-gray-100">
                             <div 
-                              className="cursor-pointer hover:bg-green-50 rounded px-2 py-1 -mx-2 transition-colors"
-                              onClick={() => {
-                                const projections = weekData.clientPaymentProjections || [];
-                                const message = projections.map(p => `${p.clientName}: ${formatCurrency(p.expectedAmount)}`).join('\n');
-                                alert(`Client Payments for Week ${weekData.weekNumber}:\n\n${message}`);
-                              }}
+                              className="hover:bg-green-50 rounded px-2 py-1 -mx-2 transition-colors"
+                              title={`Client Payments: ${weekData.clientPaymentProjections?.map(p => `${p.clientName}: ${formatCurrency(p.expectedAmount)}`).join(', ') || 'None'}`}
                             >
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-1">
@@ -235,39 +266,43 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                         </div>
                         
                         {/* Individual Outflow Estimates */}
-                        <div className="space-y-1">
+                        <div className="space-y-1 mt-1">
                           {weekData.estimates
                             .filter(est => est.type === 'outflow')
                             .map(estimate => (
                               <div
                                 key={estimate.id}
-                                className="cursor-pointer hover:bg-red-50 rounded px-2 py-1 -mx-2 border border-transparent hover:border-red-200 transition-colors"
+                                className="cursor-pointer hover:bg-red-50 rounded px-1 py-0.5 border border-transparent hover:border-red-200 transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   openEstimateModal(weekData.weekNumber, 'outflow', estimate);
                                 }}
                                 title={`Click to edit: ${estimate.description}`}
                               >
-                                <div className="text-xs text-red-600 font-medium">
-                                  Est: {formatCurrency(estimate.amount)}
-                                </div>
-                                <div className="text-xs text-gray-500 truncate">
-                                  {estimate.description}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-red-600 font-medium truncate flex-1 mr-1">
+                                    {estimate.description}
+                                  </span>
+                                  <span className="text-xs text-red-600 font-medium whitespace-nowrap">
+                                    {formatCurrency(estimate.amount)}
+                                  </span>
                                 </div>
                               </div>
                             ))
                           }
                           
                           {/* Add New Estimate Button */}
-                          <div
-                            className="cursor-pointer hover:bg-gray-50 rounded px-2 py-1 -mx-2 border border-dashed border-gray-300 hover:border-gray-400 transition-colors"
-                            onClick={() => openEstimateModal(weekData.weekNumber, 'outflow')}
-                            title="Click to add new outflow estimate"
-                          >
-                            <div className="text-xs text-gray-400 text-center">
-                              + Add Estimate
+                          {weekData.estimates.filter(est => est.type === 'outflow').length < 3 && (
+                            <div
+                              className="cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5 border border-dashed border-gray-300 hover:border-gray-400 transition-colors"
+                              onClick={() => openEstimateModal(weekData.weekNumber, 'outflow')}
+                              title="Click to add new outflow estimate"
+                            >
+                              <div className="text-xs text-gray-400 text-center">
+                                + Add Estimate
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -366,6 +401,7 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
           isOpen={modalState.isOpen}
           onClose={closeModal}
           onSave={handleEstimateSubmit}
+          onDelete={modalState.editingEstimate ? handleEstimateDelete : undefined}
           weekNumber={modalState.weekNumber}
           type={modalState.type!}
           estimate={modalState.editingEstimate}
