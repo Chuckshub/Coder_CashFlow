@@ -155,6 +155,14 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
     closeModal();
   };
 
+  const handleEstimateDelete = () => {
+    if (modalState.editingEstimate) {
+      console.log('🗑️ Deleting estimate:', modalState.editingEstimate.id);
+      onDeleteEstimate(modalState.editingEstimate.id);
+      closeModal();
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Header with refresh button */}
@@ -250,7 +258,11 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                         {/* Actual Inflows */}
                         <div 
                           className="cursor-pointer hover:bg-gray-100 rounded px-2 py-1 -mx-2 -my-1"
-                          onClick={() => openEstimateModal(weekData.weekNumber, 'inflow')}
+                          onClick={() => {
+                            // Find the first inflow estimate for this week, if any
+                            const existingEstimate = weekData.estimates.find(est => est.type === 'inflow');
+                            openEstimateModal(weekData.weekNumber, 'inflow', existingEstimate);
+                          }}
                         >
                           <div className={`text-sm font-medium ${getCurrencyColor(weekData.actualInflow)}`}>
                             {formatCurrency(weekData.actualInflow)}
@@ -299,7 +311,11 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                     <td className="border-r border-gray-200 p-0">
                       <div 
                         className="px-4 py-3 cursor-pointer hover:bg-gray-100 rounded mx-2 my-1 -mx-2 -my-1"
-                        onClick={() => openEstimateModal(weekData.weekNumber, 'outflow')}
+                        onClick={() => {
+                          // Find the first outflow estimate for this week, if any
+                          const existingEstimate = weekData.estimates.find(est => est.type === 'outflow');
+                          openEstimateModal(weekData.weekNumber, 'outflow', existingEstimate);
+                        }}
                       >
                         <div className={`text-sm font-medium ${getCurrencyColor(-weekData.actualOutflow)}`}>
                           {formatCurrency(weekData.actualOutflow)}
@@ -408,6 +424,7 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
           isOpen={modalState.isOpen}
           onClose={closeModal}
           onSave={handleEstimateSubmit}
+          onDelete={modalState.editingEstimate ? handleEstimateDelete : undefined}
           weekNumber={modalState.weekNumber}
           type={modalState.type!}
           estimate={modalState.editingEstimate}
