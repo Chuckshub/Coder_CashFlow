@@ -12,6 +12,7 @@ import {
   getBalanceColor 
 } from '../../utils/dateUtils';
 import EstimateModal from '../EstimateManager/EstimateModal';
+import WeeklyDetailView from './WeeklyDetailView';
 
 interface CashflowTableWithProjectionsProps {
   weeklyCashflows: WeeklyCashflowWithProjections[];
@@ -118,6 +119,7 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
     weekNumber: number;
     projections: ClientPaymentProjection[];
   } | null>(null);
+  const [showDetailView, setShowDetailView] = useState(false);
 
   const openEstimateModal = (weekNumber: number, type: 'inflow' | 'outflow', estimate?: Estimate) => {
     console.log('💼 Opening modal for week', weekNumber, 'type', type, estimate ? 'editing' : 'creating');
@@ -164,14 +166,25 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
             </span>
           )}
         </h3>
-        {onRefreshData && (
+        <div className="flex items-center space-x-2">
           <button
-            onClick={onRefreshData}
-            className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            onClick={() => setShowDetailView(true)}
+            className="flex items-center px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
-            🔄 Refresh Data
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Weekly Details
           </button>
-        )}
+          {onRefreshData && (
+            <button
+              onClick={onRefreshData}
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              🔄 Refresh Data
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main table */}
@@ -396,6 +409,16 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
           weekNumber={modalState.weekNumber}
           type={modalState.type!}
           estimate={modalState.editingEstimate}
+        />
+      )}
+
+      {/* Weekly Detail View Modal */}
+      {showDetailView && (
+        <WeeklyDetailView
+          weeklyCashflows={weeklyCashflows}
+          transactions={transactions}
+          onClose={() => setShowDetailView(false)}
+          onRefreshData={onRefreshData}
         />
       )}
     </div>

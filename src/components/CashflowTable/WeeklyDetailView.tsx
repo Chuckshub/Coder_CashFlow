@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { WeeklyCashflow, Transaction, Estimate } from '../../types';
+import { WeeklyCashflow, WeeklyCashflowWithProjections, Transaction, Estimate } from '../../types';
 import { formatCurrency, formatWeekRange, getCurrencyColor, isDateInWeek } from '../../utils/dateUtils';
 
 interface WeeklyDetailViewProps {
-  weeklyCashflows: WeeklyCashflow[];
+  weeklyCashflows: WeeklyCashflowWithProjections[];
   transactions: Transaction[];
   onClose: () => void;
   onRefreshData?: () => void; // Optional refresh callback
