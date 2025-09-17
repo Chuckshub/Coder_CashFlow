@@ -861,13 +861,9 @@ function DatabaseApp() {
             {weeklyCashflows.length > 0 ? (
               <CashflowTableWithProjections
                 weeklyCashflows={weeklyCashflows}
-                transactions={transactions}
-                onAddEstimate={addEstimate}
-                onUpdateEstimate={updateEstimate}
-                onDeleteEstimate={deleteEstimate}
-                onEstimateClick={handleEstimateClick}
                 onRefreshData={refreshAllData}
                 onBankBalanceUpdate={handleBankBalanceUpdate}
+                showClientProjections={true}
               />
             ) : (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">

@@ -1,126 +1,43 @@
 import React, { useState } from 'react';
-import { 
-  WeeklyCashflowWithProjections, 
-  Estimate, 
-  Transaction, 
-  ClientPaymentProjection 
-} from '../../types';
-import { 
-  formatCurrency, 
-  formatWeekRange, 
-  getCurrencyColor, 
-  getBalanceColor 
-} from '../../utils/dateUtils';
+import { formatCurrency, formatWeekRange } from '../../utils/dateUtils';
+import { WeeklyCashflowWithProjections, Estimate, ClientPaymentProjection } from '../../types';
 import EstimateModal from '../EstimateManager/EstimateModal';
 import WeeklyDetailView from './WeeklyDetailView';
-import { NumericFormat } from 'react-number-format';
 
 interface CashflowTableWithProjectionsProps {
   weeklyCashflows: WeeklyCashflowWithProjections[];
-  transactions: Transaction[];
-  onAddEstimate: (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  onUpdateEstimate: (id: string, estimate: Partial<Estimate>) => void;
-  onDeleteEstimate: (id: string) => void;
-  onEstimateClick?: (estimateId: string) => void;
   onRefreshData?: () => void;
-  onBankBalanceUpdate?: (weekNumber: number, actualBalance: number | null) => void;
+  onBankBalanceUpdate?: (weekNumber: number, actualBalance: number) => void;
   showClientProjections?: boolean;
 }
 
-interface ModalState {
-  isOpen: boolean;
-  weekNumber: number;
-  type: 'inflow' | 'outflow' | null;
-  editingEstimate?: Estimate;
-}
-
-/**
- * Get days until due badge background color
- */
-const getDaysBadgeColor = (days: number) => {
-  if (days < 0) {
-    return 'bg-red-100 text-red-800'; // Overdue
-  } else if (days <= 3) {
-    return 'bg-orange-100 text-orange-800'; // Due very soon
-  } else if (days <= 7) {
-    return 'bg-yellow-100 text-yellow-800'; // Due soon
-  } else {
-    return 'bg-green-100 text-green-800'; // Due later
-  }
-};
-
-/**
- * Format days display
- */
-const formatDaysDisplay = (days: number) => {
-  if (days === 0) return 'Today';
-  if (days < 0) return `${Math.abs(days)}d overdue`;
-  return `${days}d`;
-};
-
-/**
- * Component for displaying client payment projection details
- */
-const ClientProjectionTooltip: React.FC<{ 
-  projections: ClientPaymentProjection[] 
-}> = ({ projections }) => {
-  if (projections.length === 0) return null;
-  
-  return (
-    <div className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-3 mt-2 min-w-64">
-      <div className="text-xs font-medium text-gray-700 mb-2">
-        Expected Client Payments:
-      </div>
-      <div className="space-y-2">
-        {projections.map((projection, index) => (
-          <div key={index} className="flex justify-between items-center">
-            <div>
-              <div className="text-xs font-medium text-gray-800">
-                {projection.clientName}
-              </div>
-              <div className="text-xs text-gray-500">
-                {projection.invoiceCount} invoice{projection.invoiceCount !== 1 ? 's' : ''}
-              </div>
-              <div className="text-xs text-gray-400">
-                Due: {projection.originalDueDate.toLocaleDateString()}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className={`text-sm font-medium ${getCurrencyColor(projection.expectedAmount)}`}>
-                {formatCurrency(projection.expectedAmount)}
-              </div>
-              <span className={`text-xs px-2 py-1 rounded-full ${getDaysBadgeColor(projection.daysUntilDue)}`}>
-                {formatDaysDisplay(projection.daysUntilDue)}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> = ({ 
   weeklyCashflows, 
-  transactions, 
-  onAddEstimate, 
-  onUpdateEstimate, 
-  onDeleteEstimate,
-  onEstimateClick,
   onRefreshData,
   onBankBalanceUpdate,
   showClientProjections = true
 }) => {
-  const [modalState, setModalState] = useState<ModalState>({
-    isOpen: false,
-    weekNumber: 1,
-    type: null
-  });
-  const [hoveredProjection, setHoveredProjection] = useState<{
+  const [modalState, setModalState] = useState<{
+    isOpen: boolean;
     weekNumber: number;
-    projections: ClientPaymentProjection[];
-  } | null>(null);
+    type: 'inflow' | 'outflow' | null;
+    editingEstimate?: Estimate;
+  }>({ isOpen: false, weekNumber: 1, type: null });
+  
   const [showDetailView, setShowDetailView] = useState(false);
+
+  // Helper functions for styling
+  const getCurrencyColor = (amount: number) => {
+    if (amount > 0) return 'text-green-600';
+    if (amount < 0) return 'text-red-600';
+    return 'text-gray-500';
+  };
+
+  const getBalanceColor = (amount: number) => {
+    if (amount > 0) return 'text-green-600';
+    if (amount < 0) return 'text-red-600';
+    return 'text-gray-900';
+  };
 
   const openEstimateModal = (weekNumber: number, type: 'inflow' | 'outflow', estimate?: Estimate) => {
     console.log('💼 Opening modal for week', weekNumber, 'type', type, estimate ? 'editing' : 'creating');
@@ -138,32 +55,24 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
       isOpen: false,
       weekNumber: 1,
       type: null,
-      editingEstimate: undefined
     });
   };
 
-  const handleEstimateSubmit = (estimateData: any) => {
-    if (modalState.editingEstimate) {
-      onUpdateEstimate(modalState.editingEstimate.id, estimateData);
-    } else {
-      onAddEstimate({
-        ...estimateData,
-        weekNumber: modalState.weekNumber,
-        type: modalState.type!
-      });
-    }
+  const handleEstimateSubmit = (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => {
+    console.log('💾 Estimate submitted:', estimate);
+    // TODO: Implement estimate save logic
     closeModal();
   };
 
   return (
-    <div className="space-y-4">
-      {/* Header with refresh button */}
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-gray-900">
-          13-Week Cashflow Projection
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-medium text-gray-900">
+          13-Week Cashflow Forecast
           {showClientProjections && (
-            <span className="ml-2 text-sm text-gray-500">
-              (with client payment projections)
+            <span className="ml-2 text-sm text-blue-600 font-normal">
+              (+Client Payment Projections)
             </span>
           )}
         </h3>
@@ -248,48 +157,70 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                     <td className="border-r border-gray-200 p-0">
                       <div className="px-4 py-3">
                         {/* Actual Inflows */}
-                        <div 
-                          className="cursor-pointer hover:bg-gray-100 rounded px-2 py-1 -mx-2 -my-1"
-                          onClick={() => openEstimateModal(weekData.weekNumber, 'inflow')}
-                        >
-                          <div className={`text-sm font-medium ${getCurrencyColor(weekData.actualInflow)}`}>
-                            {formatCurrency(weekData.actualInflow)}
-                          </div>
-                          {weekData.estimatedInflow > 0 && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              Est: {formatCurrency(weekData.estimatedInflow)}
+                        <div className={`text-sm font-medium mb-2 ${getCurrencyColor(weekData.actualInflow)}`}>
+                          {formatCurrency(weekData.actualInflow)}
+                        </div>
+                        
+                        {/* Individual Inflow Estimates */}
+                        <div className="space-y-1">
+                          {weekData.estimates
+                            .filter(est => est.type === 'inflow')
+                            .map(estimate => (
+                              <div
+                                key={estimate.id}
+                                className="cursor-pointer hover:bg-blue-50 rounded px-2 py-1 -mx-2 border border-transparent hover:border-blue-200 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEstimateModal(weekData.weekNumber, 'inflow', estimate);
+                                }}
+                                title={`Click to edit: ${estimate.description}`}
+                              >
+                                <div className="text-xs text-blue-600 font-medium">
+                                  Est: {formatCurrency(estimate.amount)}
+                                </div>
+                                <div className="text-xs text-gray-500 truncate">
+                                  {estimate.description}
+                                </div>
+                              </div>
+                            ))
+                          }
+                          
+                          {/* Add New Estimate Button */}
+                          <div
+                            className="cursor-pointer hover:bg-gray-50 rounded px-2 py-1 -mx-2 border border-dashed border-gray-300 hover:border-gray-400 transition-colors"
+                            onClick={() => openEstimateModal(weekData.weekNumber, 'inflow')}
+                            title="Click to add new inflow estimate"
+                          >
+                            <div className="text-xs text-gray-400 text-center">
+                              + Add Estimate
                             </div>
-                          )}
+                          </div>
                         </div>
                         
                         {/* Client Payment Projections */}
                         {hasProjections && (
-                          <div className="relative">
+                          <div className="relative mt-3 pt-2 border-t border-gray-100">
                             <div 
-                              className="mt-2 cursor-pointer"
-                              onMouseEnter={() => setHoveredProjection({
-                                weekNumber: weekData.weekNumber,
-                                projections: weekData.clientPaymentProjections!
-                              })}
-                              onMouseLeave={() => setHoveredProjection(null)}
+                              className="cursor-pointer hover:bg-green-50 rounded px-2 py-1 -mx-2 transition-colors"
+                              onClick={() => {
+                                const projections = weekData.clientPaymentProjections || [];
+                                const message = projections.map(p => `${p.clientName}: ${formatCurrency(p.expectedAmount)}`).join('\n');
+                                alert(`Client Payments for Week ${weekData.weekNumber}:\n\n${message}`);
+                              }}
                             >
-                              <div className="flex items-center justify-between bg-blue-50 rounded px-2 py-1">
-                                <div className="text-xs text-blue-600 font-medium">
-                                  🏢 Client Payments
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-1">
+                                  <span className="text-xs text-blue-600">📋</span>
+                                  <span className="text-xs font-medium text-blue-600">Client Payments</span>
                                 </div>
-                                <div className="text-sm font-medium text-blue-700">
+                                <span className="text-xs font-medium text-green-600">
                                   {formatCurrency(weekData.projectedClientPayments || 0)}
-                                </div>
+                                </span>
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
-                                {weekData.clientPaymentProjections!.length} client{weekData.clientPaymentProjections!.length !== 1 ? 's' : ''}
+                                {weekData.clientPaymentProjections?.length || 0} client{(weekData.clientPaymentProjections?.length || 0) !== 1 ? 's' : ''}
                               </div>
                             </div>
-                            
-                            {/* Tooltip */}
-                            {hoveredProjection?.weekNumber === weekData.weekNumber && (
-                              <ClientProjectionTooltip projections={hoveredProjection.projections} />
-                            )}
                           </div>
                         )}
                       </div>
@@ -297,18 +228,47 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                     
                     {/* Outflows Column */}
                     <td className="border-r border-gray-200 p-0">
-                      <div 
-                        className="px-4 py-3 cursor-pointer hover:bg-gray-100 rounded mx-2 my-1 -mx-2 -my-1"
-                        onClick={() => openEstimateModal(weekData.weekNumber, 'outflow')}
-                      >
-                        <div className={`text-sm font-medium ${getCurrencyColor(-weekData.actualOutflow)}`}>
+                      <div className="px-4 py-3">
+                        {/* Actual Outflows */}
+                        <div className={`text-sm font-medium mb-2 ${getCurrencyColor(-weekData.actualOutflow)}`}>
                           {formatCurrency(weekData.actualOutflow)}
                         </div>
-                        {weekData.estimatedOutflow > 0 && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            Est: {formatCurrency(weekData.estimatedOutflow)}
+                        
+                        {/* Individual Outflow Estimates */}
+                        <div className="space-y-1">
+                          {weekData.estimates
+                            .filter(est => est.type === 'outflow')
+                            .map(estimate => (
+                              <div
+                                key={estimate.id}
+                                className="cursor-pointer hover:bg-red-50 rounded px-2 py-1 -mx-2 border border-transparent hover:border-red-200 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEstimateModal(weekData.weekNumber, 'outflow', estimate);
+                                }}
+                                title={`Click to edit: ${estimate.description}`}
+                              >
+                                <div className="text-xs text-red-600 font-medium">
+                                  Est: {formatCurrency(estimate.amount)}
+                                </div>
+                                <div className="text-xs text-gray-500 truncate">
+                                  {estimate.description}
+                                </div>
+                              </div>
+                            ))
+                          }
+                          
+                          {/* Add New Estimate Button */}
+                          <div
+                            className="cursor-pointer hover:bg-gray-50 rounded px-2 py-1 -mx-2 border border-dashed border-gray-300 hover:border-gray-400 transition-colors"
+                            onClick={() => openEstimateModal(weekData.weekNumber, 'outflow')}
+                            title="Click to add new outflow estimate"
+                          >
+                            <div className="text-xs text-gray-400 text-center">
+                              + Add Estimate
+                            </div>
                           </div>
-                        )}
+                        </div>
                       </div>
                     </td>
                     
@@ -334,19 +294,17 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                     {/* Bank Balance Input Column */}
                     <td className="px-4 py-3 text-center">
                       <div className="flex flex-col items-center space-y-2">
-                        <NumericFormat
-                          thousandSeparator=","
-                          prefix="$"
+                        <input
+                          type="text"
                           placeholder="$0"
-                          value={weekData.actualBankBalance || ''}
-                          onValueChange={(values) => {
-                            const value = values.value === '' ? null : parseFloat(values.value || '0');
-                            if (onBankBalanceUpdate) {
+                          value={weekData.actualBankBalance ? formatCurrency(weekData.actualBankBalance) : ''}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value.replace(/[$,]/g, ''));
+                            if (!isNaN(value) && onBankBalanceUpdate) {
                               onBankBalanceUpdate(weekData.weekNumber, value);
                             }
                           }}
-                          className="w-32 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          allowNegative={true}
+                          className="w-24 text-center text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                         {weekData.actualBankBalance && (
                           <div className={`text-xs ${getBalanceColor(weekData.actualBankBalance)}`}>
@@ -418,7 +376,7 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
       {showDetailView && (
         <WeeklyDetailView
           weeklyCashflows={weeklyCashflows}
-          transactions={transactions}
+          transactions={[]}
           onClose={() => setShowDetailView(false)}
           onRefreshData={onRefreshData}
         />
