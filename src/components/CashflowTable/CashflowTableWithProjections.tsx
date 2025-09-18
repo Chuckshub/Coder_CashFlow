@@ -252,11 +252,6 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
                   Inflows
-                  {showClientProjections && (
-                    <div className="text-xs normal-case text-gray-400 mt-1">
-                      (+Client Payments)
-                    </div>
-                  )}
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200">
                   Outflows
@@ -344,9 +339,6 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                               <div className="text-sm font-medium text-blue-700">
                                 {formatCurrency(weekData.projectedClientPayments || 0)}
                               </div>
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {weekData.clientPaymentProjections!.length} client{weekData.clientPaymentProjections!.length !== 1 ? 's' : ''}
                             </div>
                           </div>
                           

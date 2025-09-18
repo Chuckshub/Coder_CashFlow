@@ -29,6 +29,18 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
   const [activeTab, setActiveTab] = useState<'inflow' | 'outflow'>('inflow');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showRefreshSuccess, setShowRefreshSuccess] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  // Toggle expanded state for a category
+  const toggleCategoryExpanded = (category: string) => {
+    const newExpanded = new Set(expandedCategories);
+    if (newExpanded.has(category)) {
+      newExpanded.delete(category);
+    } else {
+      newExpanded.add(category);
+    }
+    setExpandedCategories(newExpanded);
+  };
 
   // Helper function to format week display names
   const getWeekDisplayName = (weekNumber: number): string => {
@@ -252,7 +264,7 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
       {data.transactions.length > 0 && (
         <div className="mt-3 pt-3 border-t border-gray-100">
           <div className="text-xs text-gray-500 mb-2">Recent Transactions:</div>
-          {data.transactions.slice(0, 3).map(transaction => (
+          {(expandedCategories.has(data.category) ? data.transactions : data.transactions.slice(0, 3)).map(transaction => (
             <div key={transaction.id} className="text-xs text-gray-600 mb-1">
               <div className="font-medium">{formatCurrency(transaction.amount)}</div>
               <div className="truncate" title={transaction.description}>
@@ -261,7 +273,15 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
             </div>
           ))}
           {data.transactions.length > 3 && (
-            <div className="text-xs text-gray-400">+{data.transactions.length - 3} more</div>
+            <div 
+              className="text-xs text-blue-500 hover:text-blue-700 cursor-pointer transition-colors"
+              onClick={() => toggleCategoryExpanded(data.category)}
+            >
+              {expandedCategories.has(data.category) 
+                ? 'Show less' 
+                : `+${data.transactions.length - 3} more`
+              }
+            </div>
           )}
         </div>
       )}
