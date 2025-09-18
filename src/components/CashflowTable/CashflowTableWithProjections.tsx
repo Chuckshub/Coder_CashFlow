@@ -294,13 +294,10 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                     
                     {/* Inflows */}
                     <td className="px-6 py-4 text-right">
-                      <div className="space-y-1">
-                        {/* Main inflow amount */}
+                      <div>
                         <div className={`text-sm font-medium ${getCurrencyColor(weekData.actualInflow)}`}>
                           {formatCurrency(weekData.actualInflow)}
                         </div>
-                        
-                        {/* Estimate button */}
                         {weekData.estimatedInflow > 0 ? (
                           <button
                             onClick={() => openEstimatesListModal(
@@ -308,7 +305,7 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                               'inflow', 
                               weekData.estimates
                             )}
-                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline cursor-pointer block"
+                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline mt-1 cursor-pointer"
                             title={`Click to manage ${weekData.estimates.filter(est => est.type === 'inflow').length} inflow estimate(s)`}
                           >
                             Est: {formatCurrency(weekData.estimatedInflow)}
@@ -316,24 +313,26 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                         ) : (
                           <button
                             onClick={() => openEstimateModal(weekData.weekNumber, 'inflow')}
-                            className="text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded cursor-pointer transition-colors"
+                            className="text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded mt-1 cursor-pointer transition-colors"
                             title="Click to add an inflow estimate for this week"
                           >
                             + Add Estimate
                           </button>
                         )}
-                        
-                        {/* Client Payment Projections */}
-                        {hasProjections && (
-                          <div className="relative">
-                            <div 
-                              className="cursor-pointer"
-                              onMouseEnter={() => setHoveredProjection({
-                                weekNumber: weekData.weekNumber,
-                                projections: weekData.clientPaymentProjections!
-                              })}
-                              onMouseLeave={() => setHoveredProjection(null)}
-                            >
+                      </div>
+                      
+                      {/* Client Payment Projections */}
+                      {hasProjections && (
+                        <div className="relative mt-2">
+                          <div 
+                            className="cursor-pointer"
+                            onMouseEnter={() => setHoveredProjection({
+                              weekNumber: weekData.weekNumber,
+                              projections: weekData.clientPaymentProjections!
+                            })}
+                            onMouseLeave={() => setHoveredProjection(null)}
+                          >
+                            <div className="flex items-center justify-between bg-blue-50 rounded px-2 py-1">
                               <div className="text-xs text-blue-600 font-medium">
                                 🏢 Client Payments
                               </div>
@@ -341,14 +340,14 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                                 {formatCurrency(weekData.projectedClientPayments || 0)}
                               </div>
                             </div>
-                            
-                            {/* Tooltip */}
-                            {hoveredProjection?.weekNumber === weekData.weekNumber && (
-                              <ClientProjectionTooltip projections={hoveredProjection.projections} />
-                            )}
                           </div>
-                        )}
-                      </div>
+                          
+                          {/* Tooltip */}
+                          {hoveredProjection?.weekNumber === weekData.weekNumber && (
+                            <ClientProjectionTooltip projections={hoveredProjection.projections} />
+                          )}
+                        </div>
+                      )}
                     </td>
                     
                     {/* Outflows */}
