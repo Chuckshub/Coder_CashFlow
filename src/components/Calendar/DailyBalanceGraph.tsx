@@ -209,6 +209,13 @@ const DailyBalanceGraph: React.FC<DailyBalanceGraphProps> = ({
 
       {/* Chart */}
       <div className="relative h-64 bg-gray-50 rounded-lg overflow-hidden">
+        {/* Y-axis labels */}
+        <div className="absolute left-0 top-0 h-full flex flex-col justify-between py-4 -ml-20 text-xs text-gray-600">
+          <span className="font-medium">{formatCurrency(chartMax)}</span>
+          <span className="font-medium text-red-600">{formatCurrency(transferThreshold)}</span>
+          <span className="font-medium">{formatCurrency(chartMin)}</span>
+        </div>
+        
         <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
           {/* Grid lines */}
           <defs>
@@ -217,6 +224,50 @@ const DailyBalanceGraph: React.FC<DailyBalanceGraphProps> = ({
             </pattern>
           </defs>
           <rect width="100" height="100" fill="url(#grid)" />
+          
+          {/* Y-axis grid lines with labels */}
+          {(() => {
+            const yAxisSteps = 5;
+            const lines: React.ReactElement[] = [];
+            for (let i = 0; i <= yAxisSteps; i++) {
+              const y = 100 - (i / yAxisSteps) * 100;
+              lines.push(
+                <line
+                  key={`y-grid-${i}`}
+                  x1="0"
+                  y1={y}
+                  x2="100"
+                  y2={y}
+                  stroke="#f3f4f6"
+                  strokeWidth="0.3"
+                />
+              );
+            }
+            return lines;
+          })()}
+          
+          {/* X-axis grid lines */}
+          {(() => {
+            const xAxisDays = [1, 5, 10, 15, 20, 25, 30];
+            const lines: React.ReactElement[] = [];
+            xAxisDays.forEach(day => {
+              if (day <= dailyBalances.length) {
+                const x = ((day - 1) / (dailyBalances.length - 1)) * 100;
+                lines.push(
+                  <line
+                    key={`x-grid-${day}`}
+                    x1={x}
+                    y1="0"
+                    x2={x}
+                    y2="100"
+                    stroke="#f3f4f6"
+                    strokeWidth="0.3"
+                  />
+                );
+              }
+            });
+            return lines;
+          })()}
           
           {/* Transfer threshold line */}
           <line
@@ -262,11 +313,27 @@ const DailyBalanceGraph: React.FC<DailyBalanceGraphProps> = ({
           })}
         </svg>
         
-        {/* Y-axis labels */}
-        <div className="absolute left-0 top-0 h-full flex flex-col justify-between py-2 -ml-16">
-          <span className="text-xs text-gray-600">{formatCurrency(chartMax)}</span>
-          <span className="text-xs text-red-600 font-medium">{formatCurrency(transferThreshold)}</span>
-          <span className="text-xs text-gray-600">{formatCurrency(chartMin)}</span>
+        {/* X-axis labels */}
+        <div className="absolute bottom-0 left-0 w-full flex justify-between px-2 -mb-6 text-xs text-gray-600">
+          {(() => {
+            const xAxisDays = [1, 5, 10, 15, 20, 25, 30];
+            const lastDay = dailyBalances.length;
+            return xAxisDays.map(day => {
+              if (day <= lastDay) {
+                const position = ((day - 1) / (lastDay - 1)) * 100;
+                return (
+                  <span 
+                    key={day} 
+                    className="font-medium"
+                    style={{ position: 'absolute', left: `${position}%`, transform: 'translateX(-50%)' }}
+                  >
+                    {day}
+                  </span>
+                );
+              }
+              return null;
+            }).filter(Boolean);
+          })()}
         </div>
       </div>
       
