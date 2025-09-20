@@ -208,132 +208,138 @@ const DailyBalanceGraph: React.FC<DailyBalanceGraphProps> = ({
       </div>
 
       {/* Chart */}
-      <div className="relative h-64 bg-gray-50 rounded-lg overflow-hidden">
-        {/* Y-axis labels */}
-        <div className="absolute left-0 top-0 h-full flex flex-col justify-between py-4 -ml-20 text-xs text-gray-600">
-          <span className="font-medium">{formatCurrency(chartMax)}</span>
-          <span className="font-medium text-red-600">{formatCurrency(transferThreshold)}</span>
-          <span className="font-medium">{formatCurrency(chartMin)}</span>
-        </div>
-        
-        <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-          {/* Grid lines */}
-          <defs>
-            <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
-              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e5e7eb" strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100" height="100" fill="url(#grid)" />
+      <div className="relative bg-gray-50 rounded-lg p-6">
+        {/* Chart area with proper margins for labels */}
+        <div className="relative" style={{ marginLeft: '80px', marginBottom: '40px', height: '240px' }}>
+          {/* Y-axis labels */}
+          <div className="absolute left-0 top-0 h-full flex flex-col justify-between -ml-20">
+            <span className="text-sm font-medium text-gray-700">{formatCurrency(chartMax)}</span>
+            <span className="text-sm font-medium text-red-600">{formatCurrency(transferThreshold)}</span>
+            <span className="text-sm font-medium text-gray-700">{formatCurrency(chartMin)}</span>
+          </div>
           
-          {/* Y-axis grid lines with labels */}
-          {(() => {
-            const yAxisSteps = 5;
-            const lines: React.ReactElement[] = [];
-            for (let i = 0; i <= yAxisSteps; i++) {
-              const y = 100 - (i / yAxisSteps) * 100;
-              lines.push(
-                <line
-                  key={`y-grid-${i}`}
-                  x1="0"
-                  y1={y}
-                  x2="100"
-                  y2={y}
-                  stroke="#f3f4f6"
-                  strokeWidth="0.3"
-                />
-              );
-            }
-            return lines;
-          })()}
-          
-          {/* X-axis grid lines */}
-          {(() => {
-            const xAxisDays = [1, 5, 10, 15, 20, 25, 30];
-            const lines: React.ReactElement[] = [];
-            xAxisDays.forEach(day => {
-              if (day <= dailyBalances.length) {
-                const x = ((day - 1) / (dailyBalances.length - 1)) * 100;
-                lines.push(
-                  <line
-                    key={`x-grid-${day}`}
-                    x1={x}
-                    y1="0"
-                    x2={x}
-                    y2="100"
-                    stroke="#f3f4f6"
-                    strokeWidth="0.3"
-                  />
-                );
-              }
-            });
-            return lines;
-          })()}
-          
-          {/* Transfer threshold line */}
-          <line
-            x1="0"
-            y1={thresholdY}
-            x2="100"
-            y2={thresholdY}
-            stroke="#dc2626"
-            strokeWidth="0.5"
-            strokeDasharray="2,2"
-          />
-          
-          {/* Balance line */}
-          <path
-            d={balancePath}
-            fill="none"
-            stroke="#2563eb"
-            strokeWidth="0.8"
-            vectorEffect="non-scaling-stroke"
-          />
-          
-          {/* Balance points */}
-          {dailyBalances.map((balance, index) => {
-            const x = (index / (dailyBalances.length - 1)) * 100;
-            const y = balanceToY(balance.balance);
-            const isBelowThreshold = balance.balance < transferThreshold;
-            
-            return (
-              <circle
-                key={index}
-                cx={x}
-                cy={y}
-                r="0.8"
-                fill={isBelowThreshold ? '#dc2626' : '#2563eb'}
+          {/* Main chart SVG */}
+          <div className="w-full h-full bg-white rounded border border-gray-200">
+            <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+              {/* Grid lines */}
+              <defs>
+                <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+                  <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e5e7eb" strokeWidth="0.5" />
+                </pattern>
+              </defs>
+              <rect width="100" height="100" fill="url(#grid)" />
+              
+              {/* Y-axis grid lines with labels */}
+              {(() => {
+                const yAxisSteps = 4;
+                const lines: React.ReactElement[] = [];
+                for (let i = 0; i <= yAxisSteps; i++) {
+                  const y = 100 - (i / yAxisSteps) * 100;
+                  lines.push(
+                    <line
+                      key={`y-grid-${i}`}
+                      x1="0"
+                      y1={y}
+                      x2="100"
+                      y2={y}
+                      stroke="#f3f4f6"
+                      strokeWidth="0.5"
+                    />
+                  );
+                }
+                return lines;
+              })()}
+              
+              {/* X-axis grid lines */}
+              {(() => {
+                const xAxisDays = [1, 5, 10, 15, 20, 25, 30];
+                const lines: React.ReactElement[] = [];
+                xAxisDays.forEach(day => {
+                  if (day <= dailyBalances.length) {
+                    const x = ((day - 1) / (dailyBalances.length - 1)) * 100;
+                    lines.push(
+                      <line
+                        key={`x-grid-${day}`}
+                        x1={x}
+                        y1="0"
+                        x2={x}
+                        y2="100"
+                        stroke="#f3f4f6"
+                        strokeWidth="0.5"
+                      />
+                    );
+                  }
+                });
+                return lines;
+              })()}
+              
+              {/* Transfer threshold line */}
+              <line
+                x1="0"
+                y1={thresholdY}
+                x2="100"
+                y2={thresholdY}
+                stroke="#dc2626"
+                strokeWidth="0.8"
+                strokeDasharray="3,3"
+              />
+              
+              {/* Balance line */}
+              <path
+                d={balancePath}
+                fill="none"
+                stroke="#2563eb"
+                strokeWidth="1.2"
                 vectorEffect="non-scaling-stroke"
-              >
-                <title>
-                  Day {balance.dayOfMonth}: {formatCurrency(balance.balance)}
-                  {isBelowThreshold ? ' (Below Threshold!)' : ''}
-                </title>
-              </circle>
-            );
-          })}
-        </svg>
-        
-        {/* X-axis labels */}
-        <div className="absolute bottom-0 left-0 w-full flex justify-between px-2 -mb-6 text-xs text-gray-600">
-          {(() => {
-            const xAxisDays = [1, 5, 10, 15, 20, 25, 30];
-            const lastDay = dailyBalances.length;
-            return xAxisDays.map(day => {
-              if (day <= lastDay) {
-                const position = ((day - 1) / (lastDay - 1)) * 100;
+              />
+              
+              {/* Balance points */}
+              {dailyBalances.map((balance, index) => {
+                const x = (index / (dailyBalances.length - 1)) * 100;
+                const y = balanceToY(balance.balance);
+                const isBelowThreshold = balance.balance < transferThreshold;
+                
                 return (
-                  <span 
-                    key={day} 
-                    className="font-medium"
-                    style={{ position: 'absolute', left: `${position}%`, transform: 'translateX(-50%)' }}
+                  <circle
+                    key={index}
+                    cx={x}
+                    cy={y}
+                    r="1.2"
+                    fill={isBelowThreshold ? '#dc2626' : '#2563eb'}
+                    vectorEffect="non-scaling-stroke"
                   >
-                    {day}
-                  </span>
+                    <title>
+                      Day {balance.dayOfMonth}: {formatCurrency(balance.balance)}
+                      {isBelowThreshold ? ' (Below Threshold!)' : ''}
+                    </title>
+                  </circle>
                 );
-              }
-              return null;
-            }).filter(Boolean);
-          })()}
+              })}
+            </svg>
+          </div>
+          
+          {/* X-axis labels */}
+          <div className="absolute -bottom-8 left-0 w-full">
+            {(() => {
+              const xAxisDays = [1, 5, 10, 15, 20, 25, 30];
+              const lastDay = dailyBalances.length;
+              return xAxisDays.map(day => {
+                if (day <= lastDay) {
+                  const position = ((day - 1) / (lastDay - 1)) * 100;
+                  return (
+                    <span 
+                      key={day} 
+                      className="absolute text-sm font-medium text-gray-700"
+                      style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
+                    >
+                      {day}
+                    </span>
+                  );
+                }
+                return null;
+              }).filter(Boolean);
+            })()}
+          </div>
         </div>
       </div>
       
