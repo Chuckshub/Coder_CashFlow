@@ -71,6 +71,7 @@ export interface Estimate {
   weekNumber: number; // Week number this estimate applies to
   isRecurring: boolean;
   recurringType?: 'weekly' | 'bi-weekly' | 'monthly';
+  monthlyDayOfMonth?: number; // For monthly recurring: day of month (1-31)
   createdAt: Date;
   updatedAt: Date;
 }

@@ -51,7 +51,8 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
     description: '',
     notes: '',
     isRecurring: false,
-    recurringType: 'weekly' as 'weekly' | 'bi-weekly' | 'monthly'
+    recurringType: 'weekly' as 'weekly' | 'bi-weekly' | 'monthly',
+    monthlyDayOfMonth: 1 // Default to 1st of month
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -65,7 +66,8 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
         description: estimate.description,
         notes: estimate.notes || '',
         isRecurring: estimate.isRecurring,
-        recurringType: estimate.recurringType || 'weekly'
+        recurringType: estimate.recurringType || 'weekly',
+        monthlyDayOfMonth: estimate.monthlyDayOfMonth || 1
       });
     } else {
       setFormData({
@@ -74,7 +76,8 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
         description: '',
         notes: '',
         isRecurring: false,
-        recurringType: 'weekly'
+        recurringType: 'weekly',
+        monthlyDayOfMonth: 1
       });
     }
     setErrors({});
@@ -144,6 +147,11 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
       estimateData.recurringType = formData.recurringType;
     }
     // If not recurring, don't add the field at all
+
+    // Add monthlyDayOfMonth if recurring type is monthly
+    if (formData.isRecurring && formData.recurringType === 'monthly') {
+      estimateData.monthlyDayOfMonth = formData.monthlyDayOfMonth;
+    }
 
     console.log('📄 EstimateModal - Creating estimate data:', {
       ...estimateData,
@@ -364,6 +372,39 @@ const EstimateModal: React.FC<EstimateModalProps> = ({
                       <option value="bi-weekly">Bi-weekly</option>
                       <option value="monthly">Monthly</option>
                     </select>
+                    
+                    {/* Monthly day selector */}
+                    {formData.recurringType === 'monthly' && (
+                      <div className="mt-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Day of Month
+                        </label>
+                        <select
+                          value={formData.monthlyDayOfMonth}
+                          onChange={(e) => setFormData(prev => ({ 
+                            ...prev, 
+                            monthlyDayOfMonth: parseInt(e.target.value)
+                          }))}
+                          className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        >
+                          {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                            <option key={day} value={day}>
+                              {day === 1 ? '1st' : 
+                               day === 2 ? '2nd' : 
+                               day === 3 ? '3rd' : 
+                               day === 21 ? '21st' : 
+                               day === 22 ? '22nd' : 
+                               day === 23 ? '23rd' : 
+                               day === 31 ? '31st' : 
+                               `${day}th`} of the month
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">
+                          For months with fewer days, the estimate will appear on the last day of that month.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

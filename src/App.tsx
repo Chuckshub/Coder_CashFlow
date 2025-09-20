@@ -368,6 +368,35 @@ function DatabaseApp() {
     setUploadProgress(null);
   }, []);
 
+  // Helper function to calculate which week a specific date falls into
+  const getWeekNumberForDate = (date: Date) => {
+    // Get the start of the current week (assuming current week is week 0)
+    const now = new Date();
+    const currentWeekStart = new Date(now);
+    currentWeekStart.setDate(now.getDate() - now.getDay()); // Start of current week (Sunday)
+    currentWeekStart.setHours(0, 0, 0, 0);
+    
+    // Calculate the difference in weeks
+    const diffInMs = date.getTime() - currentWeekStart.getTime();
+    const diffInWeeks = Math.floor(diffInMs / (7 * 24 * 60 * 60 * 1000));
+    
+    return diffInWeeks;
+  };
+  
+  // Helper function to get the actual date for a day of month in future months
+  const getDateForDayOfMonth = (dayOfMonth: number, monthsFromNow: number) => {
+    const today = new Date();
+    const targetDate = new Date(today.getFullYear(), today.getMonth() + monthsFromNow, dayOfMonth);
+    
+    // Handle edge case where dayOfMonth doesn't exist in target month (e.g., Feb 30th)
+    if (targetDate.getMonth() !== (today.getMonth() + monthsFromNow) % 12) {
+      // Set to last day of the intended month
+      targetDate.setDate(0);
+    }
+    
+    return targetDate;
+  };
+
   // Helper function to generate recurring estimates
   const generateRecurringEstimates = (baseEstimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => {
     const estimates: Estimate[] = [];
@@ -384,36 +413,73 @@ function DatabaseApp() {
       }];
     }
     
-    // Determine the interval based on recurring type
-    let interval: number;
-    switch (baseEstimate.recurringType) {
-      case 'weekly':
-        interval = 1;
-        break;
-      case 'bi-weekly':
-        interval = 2;
-        break;
-      case 'monthly':
-        interval = 4; // Approximate 4 weeks per month
-        break;
-      default:
-        interval = 1;
-    }
-    
-    // Generate estimates for future weeks
-    for (let week = startWeek; week <= futureWeeks; week += interval) {
-      const recurringEstimate: Estimate = {
-        ...baseEstimate,
-        id: uuidv4(),
-        weekNumber: week,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      estimates.push(recurringEstimate);
+    if (baseEstimate.recurringType === 'monthly' && baseEstimate.monthlyDayOfMonth) {
+      // Handle monthly with specific day of month
+      console.log(`📅 Generating monthly estimates for day ${baseEstimate.monthlyDayOfMonth} of each month`);
+      
+      // Generate for the next 12 months
+      for (let month = 0; month < 12; month++) {
+        const targetDate = getDateForDayOfMonth(baseEstimate.monthlyDayOfMonth, month);
+        const weekNumber = getWeekNumberForDate(targetDate);
+        
+        // Only include if it falls within our 13-week window and is in the future or current
+        if (weekNumber >= -1 && weekNumber <= futureWeeks) {
+          const monthlyEstimate: Estimate = {
+            ...baseEstimate,
+            id: uuidv4(),
+            weekNumber: weekNumber,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          estimates.push(monthlyEstimate);
+          console.log(`📅 Monthly estimate: ${baseEstimate.monthlyDayOfMonth}${getOrdinalSuffix(baseEstimate.monthlyDayOfMonth)} of ${targetDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} → Week ${weekNumber}`);
+        }
+      }
+    } else {
+      // Handle weekly and bi-weekly (existing logic)
+      let interval: number;
+      switch (baseEstimate.recurringType) {
+        case 'weekly':
+          interval = 1;
+          break;
+        case 'bi-weekly':
+          interval = 2;
+          break;
+        case 'monthly':
+          interval = 4; // Fallback for monthly without specific day
+          break;
+        default:
+          interval = 1;
+      }
+      
+      // Generate estimates for future weeks
+      for (let week = startWeek; week <= futureWeeks; week += interval) {
+        const recurringEstimate: Estimate = {
+          ...baseEstimate,
+          id: uuidv4(),
+          weekNumber: week,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        estimates.push(recurringEstimate);
+      }
     }
     
     console.log(`🔄 Generated ${estimates.length} recurring estimates (${baseEstimate.recurringType}) from week ${startWeek} to ${futureWeeks}`);
     return estimates;
+  };
+  
+  // Helper function to get ordinal suffix (1st, 2nd, 3rd, etc.)
+  const getOrdinalSuffix = (day: number) => {
+    if (day >= 11 && day <= 13) {
+      return 'th';
+    }
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
   };
 
   // Add estimate with Firebase and user tracking
