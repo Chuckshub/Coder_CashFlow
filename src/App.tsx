@@ -368,6 +368,54 @@ function DatabaseApp() {
     setUploadProgress(null);
   }, []);
 
+  // Helper function to generate recurring estimates
+  const generateRecurringEstimates = (baseEstimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const estimates: Estimate[] = [];
+    const futureWeeks = 13; // Generate for next 13 weeks
+    const startWeek = baseEstimate.weekNumber;
+    
+    if (!baseEstimate.isRecurring || !baseEstimate.recurringType) {
+      // Not recurring, just create the base estimate
+      return [{
+        ...baseEstimate,
+        id: uuidv4(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }];
+    }
+    
+    // Determine the interval based on recurring type
+    let interval: number;
+    switch (baseEstimate.recurringType) {
+      case 'weekly':
+        interval = 1;
+        break;
+      case 'bi-weekly':
+        interval = 2;
+        break;
+      case 'monthly':
+        interval = 4; // Approximate 4 weeks per month
+        break;
+      default:
+        interval = 1;
+    }
+    
+    // Generate estimates for future weeks
+    for (let week = startWeek; week <= futureWeeks; week += interval) {
+      const recurringEstimate: Estimate = {
+        ...baseEstimate,
+        id: uuidv4(),
+        weekNumber: week,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      estimates.push(recurringEstimate);
+    }
+    
+    console.log(`🔄 Generated ${estimates.length} recurring estimates (${baseEstimate.recurringType}) from week ${startWeek} to ${futureWeeks}`);
+    return estimates;
+  };
+
   // Add estimate with Firebase and user tracking
   const addEstimate = useCallback(async (estimate: Omit<Estimate, 'id' | 'createdAt' | 'updatedAt'>) => {
     if (!currentUser?.uid) {
@@ -375,28 +423,34 @@ function DatabaseApp() {
       return;
     }
 
-    const newEstimate: Estimate = {
-      ...estimate,
-      id: uuidv4(),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
     try {
       const firebaseService = getSimpleFirebaseService(currentUser.uid);
-      const result = await firebaseService.saveEstimate(
-        newEstimate, 
-        currentUser.displayName || '', 
-        currentUser.email || ''
+      const estimatesToCreate = generateRecurringEstimates(estimate);
+      
+      console.log(`📝 Creating ${estimatesToCreate.length} estimate(s)${estimate.isRecurring ? ' (recurring: ' + estimate.recurringType + ')' : ''}`);
+      
+      // Save all estimates to Firebase
+      const savePromises = estimatesToCreate.map(est => 
+        firebaseService.saveEstimate(
+          est,
+          currentUser.displayName || '',
+          currentUser.email || ''
+        )
       );
       
-      if (result.success) {
-        console.log('✅ Estimate saved to Firebase:', newEstimate.id);
-        // Reload estimates to get updated list
-        await loadEstimatesFromDatabase();
+      const results = await Promise.all(savePromises);
+      const failedResults = results.filter(r => !r.success);
+      
+      if (failedResults.length > 0) {
+        console.error('💥 Some estimates failed to save:', failedResults);
+        setError(`Failed to save ${failedResults.length} of ${estimatesToCreate.length} estimates`);
       } else {
-        setError(result.error || 'Failed to save estimate');
+        console.log(`✅ Successfully saved ${estimatesToCreate.length} estimate(s) to Firebase`);
       }
+      
+      // Reload estimates to get updated list
+      await loadEstimatesFromDatabase();
+      
     } catch (error: any) {
       console.error('💥 Error adding estimate:', error);
       setError(`Failed to add estimate: ${error.message}`);
