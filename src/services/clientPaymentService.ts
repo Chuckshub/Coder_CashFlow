@@ -129,8 +129,17 @@ class ClientPaymentService {
     try {
       console.log('🔄 Updating client payment:', id);
       
+      // Filter out undefined values from updates
+      const filteredUpdates: any = {};
+      Object.keys(updates).forEach(key => {
+        const value = (updates as any)[key];
+        if (value !== undefined) {
+          filteredUpdates[key] = value;
+        }
+      });
+      
       const updateData: any = {
-        ...updates,
+        ...filteredUpdates,
         updatedAt: Timestamp.fromDate(new Date()),
       };
       
