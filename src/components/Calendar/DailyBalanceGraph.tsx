@@ -292,29 +292,6 @@ const DailyBalanceGraph: React.FC<DailyBalanceGraphProps> = ({
                 strokeWidth="1.2"
                 vectorEffect="non-scaling-stroke"
               />
-              
-              {/* Balance points */}
-              {dailyBalances.map((balance, index) => {
-                const x = (index / (dailyBalances.length - 1)) * 100;
-                const y = balanceToY(balance.balance);
-                const isBelowThreshold = balance.balance < transferThreshold;
-                
-                return (
-                  <circle
-                    key={index}
-                    cx={x}
-                    cy={y}
-                    r="1.2"
-                    fill={isBelowThreshold ? '#dc2626' : '#2563eb'}
-                    vectorEffect="non-scaling-stroke"
-                  >
-                    <title>
-                      Day {balance.dayOfMonth}: {formatCurrency(balance.balance)}
-                      {isBelowThreshold ? ' (Below Threshold!)' : ''}
-                    </title>
-                  </circle>
-                );
-              })}
             </svg>
           </div>
           
@@ -353,10 +330,6 @@ const DailyBalanceGraph: React.FC<DailyBalanceGraphProps> = ({
           <div className="flex items-center space-x-1">
             <div className="w-3 h-0.5 bg-red-600 border-dashed" style={{borderTop: '1px dashed #dc2626', background: 'none'}}></div>
             <span className="text-gray-600">Transfer Threshold</span>
-          </div>
-          <div className="flex items-center space-x-1">
-            <div className="w-2 h-2 bg-red-600 rounded-full"></div>
-            <span className="text-gray-600">Below Threshold</span>
           </div>
         </div>
         
