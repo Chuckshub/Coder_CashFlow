@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, Estimate, ClientPayment } from '../../types';
 import { formatCurrency } from '../../utils/dateUtils';
+import DailyBalanceGraph from './DailyBalanceGraph';
 
 interface CalendarViewProps {
   transactions: Transaction[];
   estimates: Estimate[];
   clientPayments: ClientPayment[];
+  beginningBalance: number;
 }
 
 interface CalendarDay {
@@ -20,7 +22,8 @@ interface CalendarDay {
 const CalendarView: React.FC<CalendarViewProps> = ({
   transactions,
   estimates,
-  clientPayments
+  clientPayments,
+  beginningBalance
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -157,6 +160,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
       </div>
 
+      {/* Daily Balance Graph */}
+      <DailyBalanceGraph
+        transactions={transactions}
+        estimates={estimates}
+        clientPayments={clientPayments}
+        currentDate={currentDate}
+        beginningBalance={beginningBalance}
+      />
+
       {/* Weekday Headers */}
       <div className="grid grid-cols-7 bg-gray-100">
         {weekdays.map(day => (
@@ -234,19 +246,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       -{formatCurrency(totalOutflow)}
                     </div>
                   )}
-                  
-                  {/* Item count indicators */}
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {day.transactions.map((_, i) => (
-                      <div key={`t-${i}`} className="w-1 h-1 bg-green-400 rounded-full" />
-                    ))}
-                    {day.estimates.map((_, i) => (
-                      <div key={`e-${i}`} className="w-1 h-1 bg-blue-400 rounded-full" />
-                    ))}
-                    {day.clientPayments.map((_, i) => (
-                      <div key={`cp-${i}`} className="w-1 h-1 bg-purple-400 rounded-full" />
-                    ))}
-                  </div>
                 </div>
               )}
             </div>

@@ -1042,6 +1042,7 @@ function DatabaseApp() {
               transactions={transactions}
               estimates={estimates}
               clientPayments={clientPayments}
+              beginningBalance={beginningBalance}
             />
           </div>
         )}
