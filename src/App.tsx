@@ -18,9 +18,9 @@ import { calculateWeeklyCashflowsWithCampfireProjections } from './services/cash
 import { getClientPaymentService } from './services/clientPaymentService';
 import { getBeginningBalanceService } from './services/beginningBalanceService';
 import BeginningBalanceEditor from './components/BeginningBalance/BeginningBalanceEditor';
-// Removed unused imports
+import CalendarView from './components/Calendar/CalendarView';
 
-type ActiveView = 'upload' | 'cashflow' | 'dataManagement' | 'campfireData';
+type ActiveView = 'upload' | 'cashflow' | 'dataManagement' | 'campfireData' | 'calendar';
 
 // Calculate weekly cashflows from transactions and estimates
 function calculateWeeklyCashflows(
@@ -808,6 +808,16 @@ function DatabaseApp() {
               >
                 🔥 Campfire Invoice Data
               </button>
+              <button
+                onClick={() => setActiveView('calendar')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeView === 'calendar'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📅 Calendar
+              </button>
             </nav>
             
             {/* Real-time Status */}
@@ -1022,6 +1032,17 @@ function DatabaseApp() {
         {activeView === 'campfireData' && (
           <div className="px-4 sm:px-0">
             <ClientPayments />
+          </div>
+        )}
+        
+        {/* Calendar View */}
+        {activeView === 'calendar' && (
+          <div className="px-4 sm:px-0">
+            <CalendarView
+              transactions={transactions}
+              estimates={estimates}
+              clientPayments={clientPayments}
+            />
           </div>
         )}
       </div>
