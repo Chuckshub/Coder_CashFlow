@@ -116,7 +116,7 @@ export const validateCSVStructure = (data: any[]): { isValid: boolean; errors: s
   for (let i = 0; i < sampleSize; i++) {
     const row = data[i];
     
-    if (row.Details && !['CREDIT', 'DEBIT'].includes(row.Details)) {
+    if (row.Details && !['CREDIT', 'DEBIT', 'DSLIP'].includes(row.Details)) {
       errors.push(`Invalid Details value at row ${i + 1}: ${row.Details}`);
     }
     
@@ -141,7 +141,7 @@ export const validateCSVStructure = (data: any[]): { isValid: boolean; errors: s
 
 export const convertToTransaction = (rawTransaction: RawTransaction): Transaction => {
   const amount = Math.abs(rawTransaction.Amount);
-  const isInflow = rawTransaction.Details === 'CREDIT' || rawTransaction.Amount > 0;
+  const isInflow = rawTransaction.Details === 'CREDIT' || rawTransaction.Details === 'DSLIP' || rawTransaction.Amount > 0;
   
   // Create a Firebase-safe ID by removing invalid characters
   const safeDate = rawTransaction['Posting Date'].replace(/[/:\s]/g, '-');
@@ -185,7 +185,7 @@ export const getTransactionSummary = (transactions: RawTransaction[]) => {
     const amount = Math.abs(transaction.Amount);
     const date = parseDate(transaction['Posting Date']);
     
-    if (transaction.Details === 'CREDIT' || transaction.Amount > 0) {
+    if (transaction.Details === 'CREDIT' || transaction.Details === 'DSLIP' || transaction.Amount > 0) {
       summary.totalInflows += amount;
     } else {
       summary.totalOutflows += amount;

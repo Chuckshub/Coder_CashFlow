@@ -1,6 +1,6 @@
 // Transaction data from CSV
 export interface RawTransaction {
-  Details: 'CREDIT' | 'DEBIT';
+  Details: 'CREDIT' | 'DEBIT' | 'DSLIP';
   'Posting Date': string;
   Description: string;
   Amount: number;
