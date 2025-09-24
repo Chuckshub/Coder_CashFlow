@@ -407,9 +407,26 @@ const WeeklyDetailView: React.FC<WeeklyDetailViewProps> = ({
               </div>
             </div>
             <div className="text-center">
-              <div className="text-sm text-gray-600">Net Cashflow</div>
-              <div className={`text-xl font-bold ${getCurrencyColor(selectedWeekData.netCashflow)}`}>
-                {formatCurrency(selectedWeekData.netCashflow)}
+              <div className="text-sm text-gray-600 mb-4">Net Cashflow</div>
+              
+              {/* Actuals Only */}
+              <div className="mb-4">
+                <div className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">
+                  Net (Actuals)
+                </div>
+                <div className={`text-lg font-bold ${getCurrencyColor(selectedWeekData.netCashflowActuals)}`}>
+                  {formatCurrency(selectedWeekData.netCashflowActuals)}
+                </div>
+              </div>
+              
+              {/* With Estimates */}
+              <div className="pt-3 border-t border-gray-200">
+                <div className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">
+                  Net (w/ Estimates)
+                </div>
+                <div className={`text-lg font-bold ${getCurrencyColor(selectedWeekData.netCashflowWithEstimates)}`}>
+                  {formatCurrency(selectedWeekData.netCashflowWithEstimates)}
+                </div>
               </div>
             </div>
             <div className="text-center">
