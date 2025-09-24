@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Transaction, Estimate, WeeklyCashflow, ClientPayment, WeeklyCashflowWithProjections, RawTransaction } from './types';
 import { generate13Weeks } from './utils/dateUtils';
-import { processRawTransactionsSimple, PipelineProgress, PipelineResult } from './services/csvToFirebasePipelineSimple';
+import { processRawTransactionsShared, PipelineProgress, PipelineResult } from './services/csvToFirebasePipelineShared';
 import { getSimpleDataLoader, DataLoadingState } from './services/dataLoaderSimple';
-import { getSimpleFirebaseService } from './services/firebaseServiceSimple';
+import { getSharedFirebaseService, initializeDefaultSharedSession } from './services/firebaseServiceSharedWrapper';
 import { v4 as uuidv4 } from 'uuid';
 import CashflowTableWithProjections from './components/CashflowTable/CashflowTableWithProjections';
 import CSVUpload from './components/DataImport/CSVUpload';
@@ -145,30 +145,37 @@ function DatabaseApp() {
     estimateId: string;
   }>({ isOpen: false, estimateId: '' });
 
-  // Load transactions using the new data loader
+  // Load transactions from shared collection
   const loadTransactionsFromDatabase = useCallback(async () => {
     if (!currentUser?.uid) return;
     
-    console.log('📥 Loading transactions using new DataLoader...');
+    console.log('📥 Loading transactions from shared collection...');
     setIsLoadingTransactions(true);
     
     try {
-      const dataLoader = getSimpleDataLoader(currentUser.uid);
+      const firebaseService = getSharedFirebaseService(currentUser.uid);
+      const transactions = await firebaseService.loadTransactions();
       
-      const { data, state } = await dataLoader.loadTransactions(false, true);
+      setTransactions(transactions);
+      setDataLoadingState({
+        isLoading: false,
+        isError: false,
+        hasData: transactions.length > 0,
+        lastUpdated: new Date()
+      });
+      setError(null);
       
-      setTransactions(data);
-      setDataLoadingState(state);
-      
-      if (state.isError) {
-        setError(state.errorMessage || 'Failed to load transactions');
-      } else {
-        setError(null);
-      }
+      console.log('✅ Loaded', transactions.length, 'transactions from shared collection');
       
     } catch (error: any) {
-      console.error('💥 Error loading transactions:', error);
+      console.error('💥 Error loading transactions from shared collection:', error);
       setError(`Failed to load transactions: ${error.message}`);
+      setDataLoadingState({
+        isLoading: false,
+        isError: true,
+        errorMessage: error.message,
+        hasData: false
+      });
     } finally {
       setIsLoadingTransactions(false);
     }
@@ -181,7 +188,7 @@ function DatabaseApp() {
     console.log('📥 Loading estimates from Firebase...');
     
     try {
-      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      const firebaseService = getSharedFirebaseService(currentUser.uid);
       const loadedEstimates = await firebaseService.loadEstimates();
       setEstimates(loadedEstimates);
       console.log('✅ Loaded', loadedEstimates.length, 'estimates from Firebase');
@@ -208,56 +215,50 @@ function DatabaseApp() {
     }
   }, [currentUser?.uid]);
 
-  // Set up real-time transaction subscription
+  // Initialize shared session when user authenticates
   useEffect(() => {
     if (!currentUser?.uid) return;
     
-    console.log('👂 Setting up real-time transaction subscription...');
+    console.log('🚀 Initializing shared session for authenticated user...');
     
-    const dataLoader = getSimpleDataLoader(currentUser.uid);
-    
-    const unsubscribe = dataLoader.subscribeToTransactions((data, state) => {
-      console.log('🔄 Real-time transaction update in App:', data.length, 'transactions');
-      setTransactions(data);
-      setDataLoadingState(state);
-      
-      if (state.isError) {
-        setError(state.errorMessage || 'Transaction sync error');
-      } else if (!state.isLoading) {
-        setError(null);
+    const initializeSession = async () => {
+      try {
+        const sessionId = await initializeDefaultSharedSession(currentUser.uid);
+        console.log('✅ Shared session initialized:', sessionId);
+      } catch (error) {
+        console.error('❌ Failed to initialize shared session:', error);
       }
-    });
+    };
     
-    // Initial load
+    initializeSession();
+  }, [currentUser?.uid]);
+
+  // Load all data when user authenticates and session is ready
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    
+    console.log('📥 Loading all data for authenticated user...');
+    
+    // Load all the data
     loadTransactionsFromDatabase();
-    
-    // Also load estimates
     loadEstimatesFromDatabase();
-    
-    // Load client payments
     loadClientPayments();
-    
-    // Load beginning balance
     loadBeginningBalance();
     
-    // Load bank balances
-    const loadBankBalances = async () => {
-      try {
-        const firebaseService = getSimpleFirebaseService(currentUser.uid);
-        const bankBalanceMap = await firebaseService.loadBankBalances();
-        setBankBalances(bankBalanceMap);
-        console.log(`✅ Loaded ${bankBalanceMap.size} bank balances from Firebase`);
-      } catch (error) {
-        console.error('Error loading bank balances:', error);
-      }
-    };
-    loadBankBalances();
+    // Load bank balances - TODO: Implement in shared service
+    // const loadBankBalances = async () => {
+    //   try {
+    //     const firebaseService = getSharedFirebaseService(currentUser.uid);
+    //     const bankBalanceMap = await firebaseService.loadBankBalances();
+    //     setBankBalances(bankBalanceMap);
+    //     console.log(`✅ Loaded ${bankBalanceMap.size} bank balances from Firebase`);
+    //   } catch (error) {
+    //     console.error('Error loading bank balances:', error);
+    //   }
+    // };
+    // loadBankBalances();
     
-    return () => {
-      console.log('🗏 Cleaning up transaction subscription');
-      unsubscribe();
-    };
-  }, [currentUser?.uid, loadTransactionsFromDatabase, loadEstimatesFromDatabase, loadClientPayments]);
+  }, [currentUser?.uid]);
 
   // Calculate weekly cashflows when data changes
   const weeklyCashflows: WeeklyCashflowWithProjections[] = React.useMemo(() => {
@@ -320,7 +321,7 @@ function DatabaseApp() {
     setUploadResult(null);
     
     try {
-      const result = await processRawTransactionsSimple(
+      const result = await processRawTransactionsShared(
         rawTransactions,
         currentUser.uid
       );
@@ -490,7 +491,7 @@ function DatabaseApp() {
     }
 
     try {
-      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      const firebaseService = getSharedFirebaseService(currentUser.uid);
       const estimatesToCreate = generateRecurringEstimates(estimate);
       
       console.log(`📝 Creating ${estimatesToCreate.length} estimate(s)${estimate.isRecurring ? ' (recurring: ' + estimate.recurringType + ')' : ''}`);
@@ -544,7 +545,7 @@ function DatabaseApp() {
         updatedAt: new Date()
       };
 
-      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      const firebaseService = getSharedFirebaseService(currentUser.uid);
       const result = await firebaseService.saveEstimate(
         updatedEstimate,
         currentUser.displayName || '',
@@ -572,7 +573,7 @@ function DatabaseApp() {
     }
 
     try {
-      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      const firebaseService = getSharedFirebaseService(currentUser.uid);
       const result = await firebaseService.deleteEstimate(id);
       
       if (result.success) {
@@ -638,7 +639,7 @@ function DatabaseApp() {
     }
     
     try {
-      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      const firebaseService = getSharedFirebaseService(currentUser.uid);
       
       if (actualBalance === null) {
         // Delete the bank balance
@@ -655,7 +656,16 @@ function DatabaseApp() {
         }
       } else {
         // Save the bank balance
-        const result = await firebaseService.saveBankBalance(weekNumber, actualBalance);
+        const bankBalance = {
+          id: `balance_${weekNumber}_${Date.now()}`,
+          date: new Date(),
+          amount: actualBalance,
+          source: 'manual_entry',
+          userId: currentUser.uid,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        const result = await firebaseService.saveBankBalance(bankBalance);
         if (result.success) {
           setBankBalances(prev => {
             const newBalances = new Map(prev);
