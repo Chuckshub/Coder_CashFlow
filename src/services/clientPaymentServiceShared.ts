@@ -252,16 +252,91 @@ class SharedClientPaymentService {
       
       console.log(`🔥 Found ${invoices.length} invoices in Campfire`);
       
-      // For now, just return the count - actual import logic can be added later
-      console.log('🎉 Campfire import to shared collection completed (placeholder)');
-      return {
+      // Get existing payments to avoid duplicates
+      const existingPayments = await this.getClientPayments();
+      const existingCampfireIds = new Set(existingPayments
+        .filter(p => p.campfireInvoiceId)
+        .map(p => p.campfireInvoiceId));
+      
+      let importedCount = 0;
+      let updatedCount = 0;
+      let skippedCount = 0;
+      const errors: string[] = [];
+      const importedPayments: ClientPayment[] = [];
+      
+      // Process each invoice
+      for (const invoice of invoices) {
+        try {
+          // Calculate status
+          const isPaid = invoice.amount_paid >= invoice.total_amount;
+          const isOverdue = !isPaid && new Date(invoice.due_date) < new Date();
+          const status = isPaid ? 'paid' : isOverdue ? 'overdue' : 'pending';
+          
+          // Calculate days until due
+          const dueDate = new Date(invoice.due_date);
+          const daysUntilDue = Math.ceil((dueDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+          
+          // Create ClientPayment object
+          const paymentData: Omit<ClientPayment, 'id'> = {
+            campfireInvoiceId: invoice.id,
+            clientName: invoice.client_name,
+            invoiceNumber: invoice.invoice_number,
+            originalAmount: invoice.total_amount,
+            amountDue: invoice.amount_due,
+            originalDueDate: new Date(invoice.due_date),
+            expectedPaymentDate: new Date(invoice.due_date), // Default to original due date
+            status: status,
+            daysUntilDue: daysUntilDue,
+            description: `${invoice.contract_name} - Invoice #${invoice.invoice_number}`,
+            notes: `Imported from Campfire on ${new Date().toLocaleDateString()}`,
+            paymentTerms: invoice.terms || 'Net 30',
+            isImported: true,
+            lastCampfireSync: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          
+          if (existingCampfireIds.has(invoice.id)) {
+            // Update existing payment
+            const existingPayment = existingPayments.find(p => p.campfireInvoiceId === invoice.id);
+            if (existingPayment) {
+              await this.updateClientPayment(existingPayment.id, {
+                ...paymentData,
+                updatedAt: new Date()
+              });
+              updatedCount++;
+              console.log(`✅ Updated invoice: ${invoice.invoice_number}`);
+            }
+          } else {
+            // Create new payment
+            const newPaymentId = await this.saveClientPayment(paymentData);
+            const newPayment: ClientPayment = {
+              ...paymentData,
+              id: newPaymentId
+            };
+            importedPayments.push(newPayment);
+            importedCount++;
+            console.log(`✨ Imported new invoice: ${invoice.invoice_number}`);
+          }
+        } catch (error) {
+          const errorMsg = `Error processing invoice ${invoice.invoice_number}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          console.error('💥', errorMsg);
+          errors.push(errorMsg);
+          skippedCount++;
+        }
+      }
+      
+      const summary: CampfireImportSummary = {
         totalInvoices: invoices.length,
-        importedCount: 0, // TODO: Implement actual import
-        updatedCount: 0,
-        skippedCount: 0,
-        errors: [],
-        importedPayments: []
+        importedCount,
+        updatedCount,
+        skippedCount,
+        errors,
+        importedPayments
       };
+      
+      console.log('🎉 Campfire import to shared collection completed:', summary);
+      return summary;
       
     } catch (error) {
       console.error('💥 Campfire import to shared collection failed:', error);
