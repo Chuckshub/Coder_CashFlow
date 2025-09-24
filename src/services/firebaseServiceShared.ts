@@ -280,9 +280,11 @@ export class SharedTransactionManager {
    */
   private async getExistingHashesForSession(): Promise<Set<string>> {
     try {
+      // TEMPORARY: Remove sessionId filter to avoid composite index requirement
+      // TODO: Add back sessionId filter once Firebase indexes are created
       const q = query(
         collection(db, this.getTransactionCollectionPath()),
-        where('sessionId', '==', this.sessionId),
+        // where('sessionId', '==', this.sessionId), // Temporarily commented out
         where('hash', '!=', '')
       );
       
@@ -315,9 +317,11 @@ export class SharedTransactionManager {
     }
 
     try {
+      // TEMPORARY: Remove sessionId filter to avoid composite index requirement
+      // TODO: Add back sessionId filter once Firebase indexes are created
       const q = query(
         collection(db, this.getTransactionCollectionPath()),
-        where('sessionId', '==', this.sessionId),
+        // where('sessionId', '==', this.sessionId), // Temporarily commented out
         orderBy('date', 'desc')
       );
       
@@ -522,9 +526,11 @@ export class SharedEstimateManager {
     }
 
     try {
+      // TEMPORARY: Remove sessionId filter to avoid composite index requirement
+      // TODO: Add back sessionId filter once Firebase indexes are created
       const q = query(
         collection(db, this.getCollectionPath()),
-        where('sessionId', '==', this.sessionId),
+        // where('sessionId', '==', this.sessionId), // Temporarily commented out
         orderBy('weekNumber', 'asc')
       );
       
