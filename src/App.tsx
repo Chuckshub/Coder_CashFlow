@@ -12,6 +12,7 @@ import DataManagement from './components/DataManagement/DataManagement';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import UserHeader from './components/common/UserHeader';
 import FirebaseStatus from './components/common/FirebaseStatus';
+import FirebaseDataDebug from './components/common/FirebaseDataDebug';
 import EstimateCreatorModal from './components/common/EstimateCreatorModal';
 import ClientPayments from './components/ClientPayments/ClientPayments';
 import { calculateWeeklyCashflowsWithCampfireProjections } from './services/cashflowCalculationService';
@@ -976,6 +977,7 @@ function DatabaseApp() {
         {activeView === 'upload' && (
           <div className="px-4 sm:px-0">
             <FirebaseStatus showDetails={true} />
+            <FirebaseDataDebug />
             
             <CSVUpload
               onDataParsed={handleCSVDataParsed}
