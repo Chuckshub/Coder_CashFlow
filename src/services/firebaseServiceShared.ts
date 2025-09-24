@@ -491,6 +491,14 @@ export class SharedEstimateManager {
       throw new Error('Firebase not initialized');
     }
 
+    console.log('💾 SharedEstimateManager.saveEstimate - Saving estimate:', {
+      estimateId: estimate.id,
+      sessionId: this.sessionId,
+      userId: this.currentUserId,
+      description: estimate.description,
+      amount: estimate.amount
+    });
+
     const docRef = doc(db, this.getCollectionPath(), estimate.id);
     
     const firebaseData: SharedFirebaseEstimate = {
@@ -511,14 +519,18 @@ export class SharedEstimateManager {
     };
 
     await setDoc(docRef, firebaseData);
-    console.log('✅ Saved estimate to shared collection:', estimate.id);
+    console.log('✅ SharedEstimateManager - Estimate saved to shared collection:', estimate.id);
   }
 
   /**
    * Load all estimates from shared collection for this session
    */
   async loadEstimates(): Promise<Estimate[]> {
-    console.log('📥 Loading estimates from shared collection...');
+    console.log('📥 SharedEstimateManager.loadEstimates - Loading from shared collection...', {
+      sessionId: this.sessionId,
+      userId: this.currentUserId,
+      collectionPath: this.getCollectionPath()
+    });
     
     if (!db) {
       console.error('Firebase not initialized');
@@ -534,11 +546,22 @@ export class SharedEstimateManager {
         orderBy('weekNumber', 'asc')
       );
       
+      console.log('🔍 SharedEstimateManager - Executing query (sessionId filter disabled)');
       const snapshot = await getDocs(q);
       const estimates: Estimate[] = [];
       
+      console.log('📊 SharedEstimateManager - Raw query results:', snapshot.size, 'documents');
+      
       snapshot.forEach(doc => {
         const data = doc.data() as SharedFirebaseEstimate;
+        
+        console.log('📝 Processing estimate document:', {
+          docId: doc.id,
+          estimateId: data.id,
+          sessionId: data.sessionId,
+          description: data.description,
+          amount: data.amount
+        });
         
         const estimate: Estimate = {
           id: data.id,
@@ -557,7 +580,7 @@ export class SharedEstimateManager {
         estimates.push(estimate);
       });
       
-      console.log('📊 Loaded', estimates.length, 'estimates from shared collection');
+      console.log('✅ SharedEstimateManager - Loaded', estimates.length, 'estimates from shared collection');
       return estimates;
       
     } catch (error) {
