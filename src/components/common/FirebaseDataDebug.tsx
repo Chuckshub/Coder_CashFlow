@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getSharedFirebaseService } from '../../services/firebaseServiceSharedWrapper';
+import { getSharedClientPaymentService } from '../../services/clientPaymentServiceShared';
 import { db } from '../../services/firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
@@ -10,6 +11,7 @@ const FirebaseDataDebug: React.FC = () => {
     transactions: any[];
     estimates: any[];
     sessions: any[];
+    clientPayments: any[];
     loadingState: string;
     errors: string[];
   }>(
@@ -17,6 +19,7 @@ const FirebaseDataDebug: React.FC = () => {
       transactions: [],
       estimates: [],
       sessions: [],
+      clientPayments: [],
       loadingState: 'idle',
       errors: []
     }
@@ -73,10 +76,17 @@ const FirebaseDataDebug: React.FC = () => {
       const serviceSessions = await sharedService.loadAllSessions();
       console.log('✅ Shared service sessions:', serviceSessions.length, 'sessions');
       
+      // Test client payments
+      console.log('🔍 Testing client payments...');
+      const clientPaymentService = getSharedClientPaymentService(currentUser.uid, 'current_session');
+      const serviceClientPayments = await clientPaymentService.getClientPayments();
+      console.log('✅ Shared service client payments:', serviceClientPayments.length, 'client payments');
+      
       setDebugInfo({
         transactions: serviceTransactions,
         estimates: serviceEstimates,
         sessions: serviceSessions,
+        clientPayments: serviceClientPayments,
         loadingState: 'success',
         errors: []
       });
@@ -129,7 +139,7 @@ const FirebaseDataDebug: React.FC = () => {
           </div>
         </div>
         
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <div className="bg-white p-3 rounded border">
             <strong className="text-green-700">Transactions:</strong>
             <div className="text-lg font-bold">{debugInfo.transactions.length}</div>
@@ -148,6 +158,11 @@ const FirebaseDataDebug: React.FC = () => {
           <div className="bg-white p-3 rounded border">
             <strong className="text-purple-700">Sessions:</strong>
             <div className="text-lg font-bold">{debugInfo.sessions.length}</div>
+          </div>
+          
+          <div className="bg-white p-3 rounded border">
+            <strong className="text-orange-700">Client Payments:</strong>
+            <div className="text-lg font-bold">{debugInfo.clientPayments.length}</div>
           </div>
         </div>
         
