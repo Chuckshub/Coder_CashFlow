@@ -51,6 +51,8 @@ export interface SimpleFirebaseService {
   
   deleteEstimate(estimateId: string): Promise<{ success: boolean; message: string; error?: string }>;
   
+  deleteTransaction(transactionHash: string): Promise<{ success: boolean; message: string; error?: string }>;
+  
   saveBankBalance(
     balance: SimpleBankBalance
   ): Promise<{ success: boolean; message: string; error?: string }>;
@@ -175,6 +177,49 @@ class SharedFirebaseServiceImpl implements SimpleFirebaseService {
       return {
         success: false,
         message: 'Failed to delete estimate from shared collection',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  async deleteTransaction(transactionHash: string): Promise<{ success: boolean; message: string; error?: string }> {
+    console.log('🗑️ SharedFirebaseService.deleteTransaction - Deleting from shared collection...');
+    
+    try {
+      // Query for the transaction by hash in shared collection
+      const q = query(
+        collection(db, 'shared_transactions'),
+        where('hash', '==', transactionHash)
+      );
+      
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) {
+        return {
+          success: false,
+          message: 'Transaction not found in shared collection',
+          error: 'Transaction not found'
+        };
+      }
+      
+      // Delete all matching documents (should be only one)
+      const batch = writeBatch(db);
+      snapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      await batch.commit();
+      console.log(`✅ Deleted transaction from shared collection:`, transactionHash);
+      
+      return {
+        success: true,
+        message: 'Transaction deleted from shared collection'
+      };
+    } catch (error) {
+      console.error('💥 Error deleting transaction:', error);
+      return {
+        success: false,
+        message: 'Failed to delete transaction from shared collection',
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }

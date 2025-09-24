@@ -1083,7 +1083,17 @@ function DatabaseApp() {
         {/* Data Management View */}
         {activeView === 'dataManagement' && (
           <div className="px-4 sm:px-0">
-            <DataManagement />
+            <DataManagement 
+              transactions={transactions}
+              onTransactionUpdate={(updatedTransaction) => {
+                setTransactions(prev => 
+                  prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t)
+                );
+              }}
+              onTransactionDelete={(transactionId) => {
+                setTransactions(prev => prev.filter(t => t.id !== transactionId));
+              }}
+            />
           </div>
         )}
 

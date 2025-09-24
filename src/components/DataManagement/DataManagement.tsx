@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Transaction } from '../../types';
-import { getSimpleFirebaseService } from '../../services/firebaseServiceSimple';
+import { getSharedFirebaseService } from '../../services/firebaseServiceSharedWrapper';
 import { useAuth } from '../../contexts/AuthContext';
 import { areTransactionsSimilar } from '../../utils/smartDuplicateDetection';
 import { formatCurrency } from '../../utils/dateUtils';
 
 interface DataManagementProps {
   className?: string;
+  transactions: Transaction[];
+  onTransactionUpdate: (transaction: Transaction) => void;
+  onTransactionDelete: (transactionId: string) => void;
 }
 
 interface FilterState {
@@ -23,10 +26,13 @@ interface SimilarGroup {
   similarity: number;
 }
 
-const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
+const DataManagement: React.FC<DataManagementProps> = ({ 
+  className = '', 
+  transactions,
+  onTransactionUpdate,
+  onTransactionDelete
+}) => {
   const { currentUser } = useAuth();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
@@ -35,39 +41,11 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
     searchTerm: '',
     dateFrom: '',
     dateTo: '',
-    minAmount: '',
-    maxAmount: '',
+    minAmount: '0.00',
+    maxAmount: '999999.00',
     category: ''
   });
   const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
-
-  // Load transactions from Firebase
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const loadTransactions = async () => {
-      setLoading(true);
-      try {
-        const firebaseService = getSimpleFirebaseService(currentUser.uid);
-        const loadedTransactions = await firebaseService.loadTransactions();
-        
-        // Sort by date descending (newest first)
-        const sortedTransactions = loadedTransactions.sort((a, b) => 
-          b.date.getTime() - a.date.getTime()
-        );
-        
-        setTransactions(sortedTransactions);
-        console.log(`📊 Loaded ${sortedTransactions.length} transactions from Firebase`);
-      } catch (err) {
-        console.error('Error loading transactions:', err);
-        setError(`Failed to load transactions: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadTransactions();
-  }, [currentUser]);
 
   // Find similar transaction groups for duplicate highlighting
   const similarGroups = useMemo(() => {
@@ -176,7 +154,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
 
     setDeleting(prev => new Set(prev).add(transactionHash));
     try {
-      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      const firebaseService = getSharedFirebaseService(currentUser.uid);
       const result = await firebaseService.deleteTransaction(transactionHash);
       
       if (!result.success) {
@@ -184,7 +162,10 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
       }
       
       // Remove from local state using hash to find the transaction
-      setTransactions(prev => prev.filter(t => !t.hash || t.hash !== transactionHash));
+      const transactionToDelete = transactions.find(t => t.hash === transactionHash);
+      if (transactionToDelete) {
+        onTransactionDelete(transactionToDelete.id);
+      }
       setSelectedTransactions(prev => {
         const newSet = new Set(prev);
         // Remove by hash, but selected transactions are stored by hash now
@@ -215,7 +196,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
 
     setDeleting(new Set(transactionHashes));
     try {
-      const firebaseService = getSimpleFirebaseService(currentUser.uid);
+      const firebaseService = getSharedFirebaseService(currentUser.uid);
       
       // Delete transactions in parallel using hashes
       const results = await Promise.all(
@@ -231,7 +212,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
       
       // Remove successfully deleted transactions from local state using hashes
       const successfulHashes = transactionHashes.filter((hash, index) => results[index].success);
-      setTransactions(prev => prev.filter(t => !t.hash || !successfulHashes.includes(t.hash)));
+      successfulHashes.forEach(hash => {
+        const transactionToDelete = transactions.find(t => t.hash === hash);
+        if (transactionToDelete) {
+          onTransactionDelete(transactionToDelete.id);
+        }
+      });
       setSelectedTransactions(new Set());
       
       console.log(`✅ Bulk deleted ${successfulHashes.length} transactions`);
@@ -284,17 +270,6 @@ const DataManagement: React.FC<DataManagementProps> = ({ className = '' }) => {
     });
     setShowDuplicatesOnly(false);
   };
-
-  if (loading) {
-    return (
-      <div className={`flex items-center justify-center p-8 ${className}`}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading transactions...</p>
-        </div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
