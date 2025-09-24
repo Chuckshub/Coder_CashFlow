@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { getClientPaymentService } from '../../services/clientPaymentService';
+import { getSharedClientPaymentService } from '../../services/clientPaymentServiceShared';
 import { getCampfireService } from '../../services/campfireService';
 import { ClientPayment, CampfireInvoice, CampfireImportSummary, ImportStatus } from '../../types';
 import { formatCurrency } from '../../utils/dateUtils';
@@ -256,7 +256,7 @@ const ClientPayments: React.FC = () => {
   }>({ loading: false, invoices: [], error: null, lastFetched: null });
   const [error, setError] = useState<string | null>(null);
 
-  const clientPaymentService = getClientPaymentService(currentUser?.uid || '');
+  const clientPaymentService = getSharedClientPaymentService(currentUser?.uid || '', 'current_session');
   const campfireService = getCampfireService();
 
   // Load payments on component mount

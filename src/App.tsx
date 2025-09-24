@@ -16,7 +16,7 @@ import FirebaseDataDebug from './components/common/FirebaseDataDebug';
 import EstimateCreatorModal from './components/common/EstimateCreatorModal';
 import ClientPayments from './components/ClientPayments/ClientPayments';
 import { calculateWeeklyCashflowsWithCampfireProjections } from './services/cashflowCalculationService';
-import { getClientPaymentService } from './services/clientPaymentService';
+import { getSharedClientPaymentService } from './services/clientPaymentServiceShared';
 import { getBeginningBalanceService } from './services/beginningBalanceService';
 import BeginningBalanceEditor from './components/BeginningBalance/BeginningBalanceEditor';
 import CalendarView from './components/Calendar/CalendarView';
@@ -206,7 +206,7 @@ function DatabaseApp() {
     console.log('💰 Loading client payments from Firebase...');
     
     try {
-      const clientPaymentService = getClientPaymentService(currentUser.uid);
+      const clientPaymentService = getSharedClientPaymentService(currentUser.uid, 'current_session');
       const loadedPayments = await clientPaymentService.getClientPayments();
       setClientPayments(loadedPayments);
       console.log('✅ Loaded', loadedPayments.length, 'client payments from Firebase');
