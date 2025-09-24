@@ -246,18 +246,18 @@ function DatabaseApp() {
     loadClientPayments();
     loadBeginningBalance();
     
-    // Load bank balances - TODO: Implement in shared service
-    // const loadBankBalances = async () => {
-    //   try {
-    //     const firebaseService = getSharedFirebaseService(currentUser.uid);
-    //     const bankBalanceMap = await firebaseService.loadBankBalances();
-    //     setBankBalances(bankBalanceMap);
-    //     console.log(`✅ Loaded ${bankBalanceMap.size} bank balances from Firebase`);
-    //   } catch (error) {
-    //     console.error('Error loading bank balances:', error);
-    //   }
-    // };
-    // loadBankBalances();
+    // Load bank balances
+    const loadBankBalances = async () => {
+      try {
+        const firebaseService = getSharedFirebaseService(currentUser.uid);
+        const bankBalanceMap = await firebaseService.loadBankBalances();
+        setBankBalances(bankBalanceMap);
+        console.log(`✅ Loaded ${bankBalanceMap.size} bank balances from Firebase`);
+      } catch (error) {
+        console.error('Error loading bank balances:', error);
+      }
+    };
+    loadBankBalances();
     
   }, [currentUser?.uid]);
 
@@ -282,18 +282,22 @@ function DatabaseApp() {
       }));
     
     try {
-      const cashflowsWithProjections = calculateWeeklyCashflowsWithCampfireProjections(
+      // Enhanced calculation service with client payment projections  
+      const cashflowWithProjections = calculateWeeklyCashflowsWithCampfireProjections(
         transactions,
-        estimates, 
+        estimates,
         beginningBalance,
         mockInvoices
       );
       
-      // Add bank balance data to each week
-      return cashflowsWithProjections.map(weekData => ({
+      // Add actual bank balances to each week
+      const finalCashflows = cashflowWithProjections.map(weekData => ({
         ...weekData,
         actualBankBalance: bankBalances.get(weekData.weekNumber) || undefined
       }));
+      
+      return finalCashflows;
+      
     } catch (error) {
       console.error('Error calculating cashflows with Campfire projections:', error);
       // Fallback to basic calculation
@@ -306,6 +310,52 @@ function DatabaseApp() {
       }));
     }
   }, [transactions, estimates, bankBalances, clientPayments, beginningBalance]);
+
+  // Handle Week -1 dropping off and updating beginning balance (moved to separate effect to avoid dependency issues)
+  useEffect(() => {
+    if (weeklyCashflows.length === 0) return;
+    
+    const hasWeekMinusOne = weeklyCashflows.some(week => week.weekNumber === -1);
+    const currentOldestWeek = Math.min(...weeklyCashflows.map(week => week.weekNumber));
+    
+    if (!hasWeekMinusOne && currentOldestWeek === 0) {
+      // Week -1 has dropped off, check if we need to update beginning balance
+      console.log('🔄 Week -1 has dropped off, checking for beginning balance update...');
+      
+      // Look for a stored Week -1 ending balance in bank balances
+      const weekMinusOneEndingBalance = bankBalances.get(-1);
+      if (weekMinusOneEndingBalance && weekMinusOneEndingBalance !== beginningBalance) {
+        console.log(`💰 Updating beginning balance from ${beginningBalance} to ${weekMinusOneEndingBalance} (Week -1 ending balance)`);
+        
+        // Use async function to handle the updates
+        const updateBalanceAndCleanup = async () => {
+          try {
+            // Update beginning balance
+            if (currentUser?.uid) {
+              const balanceService = getBeginningBalanceService(currentUser.uid);
+              await balanceService.updateBeginningBalance(weekMinusOneEndingBalance, isBalanceLocked);
+              setBeginningBalance(weekMinusOneEndingBalance);
+            }
+            
+            // Clean up the Week -1 bank balance entry
+            const firebaseService = getSharedFirebaseService(currentUser?.uid || '');
+            await firebaseService.deleteBankBalance(-1);
+            setBankBalances(prev => {
+              const newBalances = new Map(prev);
+              newBalances.delete(-1);
+              return newBalances;
+            });
+            
+            console.log('✅ Successfully updated beginning balance and cleaned up Week -1');
+          } catch (error) {
+            console.error('💥 Error updating beginning balance:', error);
+          }
+        };
+        
+        updateBalanceAndCleanup();
+      }
+    }
+  }, [weeklyCashflows, bankBalances, beginningBalance, currentUser?.uid, isBalanceLocked]);
 
   // Handle CSV data parsing using simplified pipeline
   const handleCSVDataParsed = useCallback(async (rawTransactions: RawTransaction[]) => {

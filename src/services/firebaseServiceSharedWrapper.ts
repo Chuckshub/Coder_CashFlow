@@ -1,6 +1,8 @@
 import { Transaction, RawTransaction, Estimate } from '../types';
 import { SharedTransactionManager, SharedEstimateManager, SharedSessionMetadata } from './firebaseServiceShared';
 import { v4 as uuidv4 } from 'uuid';
+import { doc, setDoc, Timestamp, collection, query, where, orderBy, getDocs, writeBatch } from 'firebase/firestore';
+import { db } from './firebase';
 
 // ============================================================================
 // SHARED FIREBASE SERVICE WRAPPER
@@ -54,7 +56,7 @@ export interface SimpleFirebaseService {
     balance: SimpleBankBalance
   ): Promise<{ success: boolean; message: string; error?: string }>;
   
-  loadBankBalances(): Promise<Map<string, number>>;
+  loadBankBalances(): Promise<Map<number, number>>;
   
   deleteBankBalance(weekNumber: number): Promise<{ success: boolean; message: string; error?: string }>;
   
@@ -182,28 +184,106 @@ class SharedFirebaseServiceImpl implements SimpleFirebaseService {
   async saveBankBalance(
     balance: SimpleBankBalance
   ): Promise<{ success: boolean; message: string; error?: string }> {
-    // For now, bank balances remain user-specific as they're more personal
-    // This could be moved to shared collections later if needed
-    console.log('💾 SharedFirebaseService.saveBankBalance - Bank balances remain user-specific for now');
-    return {
-      success: true,
-      message: 'Bank balance saving not implemented in shared mode yet'
-    };
+    console.log('💾 SharedFirebaseService.saveBankBalance - Saving to shared collection...');
+    
+    try {
+      const docRef = doc(db, 'shared_bank_balances', balance.id);
+      const firebaseData = {
+        id: balance.id,
+        weekNumber: parseInt(balance.id.split('_')[1]) || 0, // Extract week number from ID
+        date: Timestamp.fromDate(balance.date),
+        amount: balance.amount,
+        source: balance.source,
+        userId: balance.userId,
+        createdAt: Timestamp.fromDate(balance.createdAt),
+        updatedAt: Timestamp.fromDate(balance.updatedAt)
+      };
+      
+      await setDoc(docRef, firebaseData);
+      console.log('✅ Bank balance saved to shared collection:', balance.id);
+      
+      return {
+        success: true,
+        message: 'Bank balance saved to shared collection'
+      };
+    } catch (error) {
+      console.error('💥 Error saving bank balance:', error);
+      return {
+        success: false,
+        message: 'Failed to save bank balance',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 
-  async loadBankBalances(): Promise<Map<string, number>> {
-    // For now, bank balances remain user-specific as they're more personal
-    console.log('📥 SharedFirebaseService.loadBankBalances - Bank balances remain user-specific for now');
-    return new Map();
+  async loadBankBalances(): Promise<Map<number, number>> {
+    console.log('📥 SharedFirebaseService.loadBankBalances - Loading from shared collection...');
+    
+    try {
+      const q = query(
+        collection(db, 'shared_bank_balances'),
+        where('userId', '==', this.userId),
+        orderBy('weekNumber', 'asc')
+      );
+      
+      const snapshot = await getDocs(q);
+      const bankBalances = new Map<number, number>();
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        bankBalances.set(data.weekNumber, data.amount);
+      });
+      
+      console.log(`✅ Loaded ${bankBalances.size} bank balances from shared collection`);
+      return bankBalances;
+      
+    } catch (error) {
+      console.error('💥 Error loading bank balances:', error);
+      return new Map();
+    }
   }
 
   async deleteBankBalance(weekNumber: number): Promise<{ success: boolean; message: string; error?: string }> {
-    // For now, bank balances remain user-specific as they're more personal
-    console.log('🗑️ SharedFirebaseService.deleteBankBalance - Bank balance deletion not implemented in shared mode yet');
-    return {
-      success: true,
-      message: 'Bank balance deletion not implemented in shared mode yet'
-    };
+    console.log(`🗑️ SharedFirebaseService.deleteBankBalance - Deleting week ${weekNumber}`);
+    
+    try {
+      // Query for the balance to delete
+      const q = query(
+        collection(db, 'shared_bank_balances'),
+        where('userId', '==', this.userId),
+        where('weekNumber', '==', weekNumber)
+      );
+      
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) {
+        return {
+          success: true,
+          message: 'No bank balance found to delete'
+        };
+      }
+      
+      // Delete all matching documents
+      const batch = writeBatch(db);
+      snapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      await batch.commit();
+      console.log(`✅ Deleted bank balance for week ${weekNumber}`);
+      
+      return {
+        success: true,
+        message: `Bank balance deleted for week ${weekNumber}`
+      };
+    } catch (error) {
+      console.error('💥 Error deleting bank balance:', error);
+      return {
+        success: false,
+        message: 'Failed to delete bank balance',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 
   async loadAllSessions(): Promise<SharedSessionMetadata[]> {
