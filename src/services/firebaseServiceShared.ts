@@ -67,10 +67,10 @@ export interface SharedFirebaseEstimate {
   type: 'inflow' | 'outflow';
   category: string;
   description: string;
-  notes?: string;
+  notes?: string | null;
   weekNumber: number;
   isRecurring: boolean;
-  recurringType?: 'weekly' | 'bi-weekly' | 'monthly';
+  recurringType?: 'weekly' | 'bi-weekly' | 'monthly' | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy: string; // User ID who created this estimate
@@ -508,10 +508,10 @@ export class SharedEstimateManager {
       type: estimate.type,
       category: estimate.category,
       description: estimate.description,
-      notes: estimate.notes,
+      notes: estimate.notes || null, // Convert undefined to null
       weekNumber: estimate.weekNumber,
       isRecurring: estimate.isRecurring,
-      recurringType: estimate.recurringType,
+      recurringType: estimate.recurringType || null, // Convert undefined to null
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
       createdBy: this.currentUserId,
@@ -569,10 +569,10 @@ export class SharedEstimateManager {
           type: data.type,
           category: data.category,
           description: data.description,
-          notes: data.notes,
+          notes: data.notes || undefined, // Convert null back to undefined
           weekNumber: data.weekNumber,
           isRecurring: data.isRecurring,
-          recurringType: data.recurringType,
+          recurringType: data.recurringType || undefined, // Convert null back to undefined
           createdAt: data.createdAt.toDate(),
           updatedAt: data.updatedAt.toDate()
         };
