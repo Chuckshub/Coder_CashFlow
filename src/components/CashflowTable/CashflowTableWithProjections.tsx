@@ -382,14 +382,25 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                     
                     {/* Net Cashflow Column */}
                     <td className="px-4 py-3 text-center border-r border-gray-200">
-                      <div className={`text-sm font-medium ${getCurrencyColor(weekData.netCashflow)}`}>
-                        {formatCurrency(weekData.netCashflow)}
-                      </div>
-                      {(weekData.estimatedInflow > 0 || weekData.estimatedOutflow > 0) && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          Est: {formatCurrency(weekData.estimatedInflow - weekData.estimatedOutflow)}
+                      {/* Actuals Only */}
+                      <div className="space-y-1">
+                        <div className="text-xs text-gray-500 uppercase tracking-wider font-medium">
+                          Net (Actuals)
                         </div>
-                      )}
+                        <div className={`text-sm font-medium ${getCurrencyColor(weekData.netCashflowActuals)}`}>
+                          {formatCurrency(weekData.netCashflowActuals)}
+                        </div>
+                      </div>
+                      
+                      {/* With Estimates */}
+                      <div className="space-y-1 mt-3 pt-2 border-t border-gray-100">
+                        <div className="text-xs text-gray-500 uppercase tracking-wider font-medium">
+                          Net (w/ Estimates)
+                        </div>
+                        <div className={`text-sm font-medium ${getCurrencyColor(weekData.netCashflowWithEstimates)}`}>
+                          {formatCurrency(weekData.netCashflowWithEstimates)}
+                        </div>
+                      </div>
                     </td>
                     
                     {/* Running Balance Column */}

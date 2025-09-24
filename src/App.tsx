@@ -76,6 +76,10 @@ function calculateWeeklyCashflows(
       const totalOutflow = actualOutflow + estimatedOutflow;
       const netCashflow = totalInflow - totalOutflow;
       
+      // Calculate separate net cashflows
+      const netCashflowActuals = actualInflow - actualOutflow; // Only actual transactions
+      const netCashflowWithEstimates = netCashflow; // Same as total in this case (no projections)
+      
       runningBalance += netCashflow;
       
       // Determine week status
@@ -101,6 +105,8 @@ function calculateWeeklyCashflows(
         totalInflow,
         totalOutflow,
         netCashflow,
+        netCashflowActuals,
+        netCashflowWithEstimates,
         runningBalance,
         estimates: weekEstimates,
         transactions: weekTransactions,

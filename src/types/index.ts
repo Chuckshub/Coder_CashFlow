@@ -91,7 +91,9 @@ export interface WeeklyCashflow {
   estimatedOutflow: number;
   totalInflow: number;
   totalOutflow: number;
-  netCashflow: number;
+  netCashflow: number; // Total net (actuals + estimates + projections)
+  netCashflowActuals: number; // Net from actual transactions only
+  netCashflowWithEstimates: number; // Net including estimates/projections
   runningBalance: number;
   actualBankBalance?: number; // User-entered actual bank balance for reconciliation
   estimates: Estimate[];

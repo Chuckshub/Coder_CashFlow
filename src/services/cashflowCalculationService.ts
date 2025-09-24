@@ -85,6 +85,10 @@ export function calculateWeeklyCashflowsWithAR(
       const totalOutflow = actualOutflow + estimatedOutflow;
       const netCashflow = totalInflow - totalOutflow;
       
+      // Calculate separate net cashflows
+      const netCashflowActuals = actualInflow - actualOutflow; // Only actual transactions
+      const netCashflowWithEstimates = (actualInflow + estimatedInflow) - (actualOutflow + estimatedOutflow); // Actuals + estimates, no AR
+      
       runningBalance += netCashflow;
       
       // Determine week status
@@ -115,6 +119,8 @@ export function calculateWeeklyCashflowsWithAR(
         transactions: weekTransactions,
         arEstimates: weekAREstimates,
         estimatedARInflow,
+        netCashflowActuals,
+        netCashflowWithEstimates,
       };
       
       return weeklyCashflow;
@@ -474,6 +480,9 @@ export function calculateWeeklyCashflowsWithCampfireProjections(
       const totalInflow = week.totalInflow + projectedClientPayments;
       const netCashflow = totalInflow - week.totalOutflow;
       
+      // Update separate net cashflows (projections affect the total but not the actuals/estimates split)
+      const netCashflowWithProjections = week.netCashflowWithEstimates + projectedClientPayments;
+      
       if (index === 0) {
         runningBalance += netCashflow;
       } else {
@@ -484,6 +493,7 @@ export function calculateWeeklyCashflowsWithCampfireProjections(
         ...week,
         totalInflow,
         netCashflow,
+        netCashflowWithEstimates: netCashflowWithProjections, // Include projections in the "with estimates" total
         endingBalance: runningBalance,
         projectedClientPayments,
         clientPaymentProjections
