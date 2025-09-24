@@ -68,26 +68,26 @@ const ClientProjectionTooltip: React.FC<{
   if (projections.length === 0) return null;
   
   return (
-    <div className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-3 mt-2 min-w-64">
-      <div className="text-xs font-medium text-gray-700 mb-2">
+    <div className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4 mt-2 min-w-80 max-w-96">
+      <div className="text-sm font-medium text-gray-700 mb-3">
         Expected Client Payments:
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {projections.map((projection, index) => (
-          <div key={index} className="flex justify-between items-center">
-            <div>
-              <div className="text-xs font-medium text-gray-800">
+          <div key={index} className="flex justify-between items-start gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-gray-800 truncate">
                 {projection.clientName}
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-500 mt-1">
                 {projection.invoiceCount} invoice{projection.invoiceCount !== 1 ? 's' : ''}
               </div>
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-gray-400 mt-1">
                 Due: {projection.originalDueDate.toLocaleDateString()}
               </div>
             </div>
-            <div className="text-right">
-              <div className={`text-sm font-medium ${getCurrencyColor(projection.expectedAmount)}`}>
+            <div className="text-right flex-shrink-0">
+              <div className={`text-sm font-medium mb-1 ${getCurrencyColor(projection.expectedAmount)}`}>
                 {formatCurrency(projection.expectedAmount)}
               </div>
               <span className={`text-xs px-2 py-1 rounded-full ${getDaysBadgeColor(projection.daysUntilDue)}`}>
