@@ -712,7 +712,6 @@ function DatabaseApp() {
           date: new Date(),
           amount: actualBalance,
           source: 'manual_entry',
-          userId: currentUser.uid,
           createdAt: new Date(),
           updatedAt: new Date()
         };

@@ -21,7 +21,6 @@ export interface SimpleBankBalance {
   date: Date;
   amount: number;
   source: string;
-  userId: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -194,9 +193,9 @@ class SharedFirebaseServiceImpl implements SimpleFirebaseService {
         date: Timestamp.fromDate(balance.date),
         amount: balance.amount,
         source: balance.source,
-        userId: balance.userId,
         createdAt: Timestamp.fromDate(balance.createdAt),
-        updatedAt: Timestamp.fromDate(balance.updatedAt)
+        updatedAt: Timestamp.fromDate(balance.updatedAt),
+        lastModifiedBy: this.userId // Track who last modified, but don't filter by it
       };
       
       await setDoc(docRef, firebaseData);
@@ -217,12 +216,11 @@ class SharedFirebaseServiceImpl implements SimpleFirebaseService {
   }
 
   async loadBankBalances(): Promise<Map<number, number>> {
-    console.log('📥 SharedFirebaseService.loadBankBalances - Loading from shared collection...');
+    console.log('📥 SharedFirebaseService.loadBankBalances - Loading from shared collection (all users)...');
     
     try {
       const q = query(
         collection(db, 'shared_bank_balances'),
-        where('userId', '==', this.userId),
         orderBy('weekNumber', 'asc')
       );
       
@@ -234,7 +232,7 @@ class SharedFirebaseServiceImpl implements SimpleFirebaseService {
         bankBalances.set(data.weekNumber, data.amount);
       });
       
-      console.log(`✅ Loaded ${bankBalances.size} bank balances from shared collection`);
+      console.log(`✅ Loaded ${bankBalances.size} shared bank balances from shared collection`);
       return bankBalances;
       
     } catch (error) {
@@ -244,13 +242,12 @@ class SharedFirebaseServiceImpl implements SimpleFirebaseService {
   }
 
   async deleteBankBalance(weekNumber: number): Promise<{ success: boolean; message: string; error?: string }> {
-    console.log(`🗑️ SharedFirebaseService.deleteBankBalance - Deleting week ${weekNumber}`);
+    console.log(`🗑️ SharedFirebaseService.deleteBankBalance - Deleting shared week ${weekNumber}`);
     
     try {
-      // Query for the balance to delete
+      // Query for the balance to delete (no user filter)
       const q = query(
         collection(db, 'shared_bank_balances'),
-        where('userId', '==', this.userId),
         where('weekNumber', '==', weekNumber)
       );
       
@@ -270,11 +267,11 @@ class SharedFirebaseServiceImpl implements SimpleFirebaseService {
       });
       
       await batch.commit();
-      console.log(`✅ Deleted bank balance for week ${weekNumber}`);
+      console.log(`✅ Deleted shared bank balance for week ${weekNumber}`);
       
       return {
         success: true,
-        message: `Bank balance deleted for week ${weekNumber}`
+        message: `Shared bank balance deleted for week ${weekNumber}`
       };
     } catch (error) {
       console.error('💥 Error deleting bank balance:', error);
