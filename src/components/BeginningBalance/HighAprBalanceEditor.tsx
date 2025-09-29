@@ -169,12 +169,12 @@ const HighAprBalanceEditor: React.FC<HighAprBalanceEditorProps> = ({
         {isLocked ? (
           <span className="flex items-center space-x-1">
             <span>🔒</span>
-            <span>Balance is locked</span>
+            <span>Balance is locked from editing</span>
           </span>
         ) : (
           <span className="flex items-center space-x-1">
             <span>🔓</span>
-            <span>Click balance to edit • Separate from cashflow calculations</span>
+            <span>Click balance to edit • Click lock to secure</span>
           </span>
         )}
       </div>
