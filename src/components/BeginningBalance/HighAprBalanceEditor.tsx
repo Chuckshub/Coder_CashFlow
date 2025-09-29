@@ -71,7 +71,7 @@ const HighAprBalanceEditor: React.FC<HighAprBalanceEditorProps> = ({
     return (
       <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-gray-900">High APR Account Balance</h3>
+          <h3 className="text-sm font-medium text-gray-900">Investment Account Balance</h3>
           <div className="flex items-center space-x-2">
             <button
               onClick={() => onToggleLock(!isLocked)}
@@ -110,7 +110,7 @@ const HighAprBalanceEditor: React.FC<HighAprBalanceEditorProps> = ({
               decimalScale={2}
               fixedDecimalScale={false}
               allowNegative={true}
-              placeholder="Enter high APR account balance"
+              placeholder="Enter investment account balance"
               className={`w-full px-3 py-2 text-lg font-medium border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                 error ? 'border-red-300 bg-red-50' : 'border-gray-300'
               }`}
@@ -145,7 +145,7 @@ const HighAprBalanceEditor: React.FC<HighAprBalanceEditorProps> = ({
   return (
     <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-gray-900">High APR Account</h3>
+        <h3 className="text-sm font-medium text-gray-900">Investment Account</h3>
         <div className="flex items-center space-x-2">
           <button
             onClick={() => onToggleLock(!isLocked)}
@@ -177,7 +177,7 @@ const HighAprBalanceEditor: React.FC<HighAprBalanceEditorProps> = ({
             : 'text-blue-600 cursor-pointer hover:text-blue-800'
         } transition-colors`}
         onClick={handleStartEdit}
-        title={isLocked ? 'Balance is locked' : 'Click to edit high APR account balance'}
+        title={isLocked ? 'Balance is locked' : 'Click to edit investment account balance'}
       >
         {isLoading ? (
           <div className="flex items-center space-x-2">
