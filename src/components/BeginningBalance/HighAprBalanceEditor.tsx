@@ -59,103 +59,33 @@ const HighAprBalanceEditor: React.FC<HighAprBalanceEditorProps> = ({
     setError(null);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSave();
-    } else if (e.key === 'Escape') {
+  const handleToggleLock = () => {
+    if (isEditing) {
       handleCancel();
     }
+    onToggleLock(!isLocked);
   };
 
-  if (isEditing) {
-    return (
-      <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-gray-900">Investment Account Balance</h3>
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2">
-            <button
-              onClick={() => onToggleLock(!isLocked)}
-              disabled={isLoading}
-              className={`p-1 rounded ${
-                isLocked 
-                  ? 'text-red-600 hover:bg-red-50' 
-                  : 'text-gray-400 hover:bg-gray-50'
-              } transition-colors disabled:opacity-50`}
-              title={isLocked ? 'Click to unlock editing' : 'Click to lock editing'}
-            >
-              {isLocked ? (
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2H7V7a3 3 0 015.905-.75 1 1 0 001.937-.5A5.002 5.002 0 0010 2z" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </div>
-        
-        <div className="space-y-3">
-          <div>
-            <NumericFormat
-              value={editValue}
-              onValueChange={(values) => {
-                setEditValue(values.value);
-                setError(null);
-              }}
-              onKeyDown={handleKeyPress}
-              thousandSeparator={true}
-              prefix="$"
-              decimalScale={2}
-              fixedDecimalScale={false}
-              allowNegative={true}
-              placeholder="Enter investment account balance"
-              className={`w-full px-3 py-2 text-lg font-medium border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                error ? 'border-red-300 bg-red-50' : 'border-gray-300'
-              }`}
-              autoFocus
-            />
-            {error && (
-              <p className="mt-1 text-xs text-red-600">{error}</p>
+            <h3 className="text-sm font-medium text-gray-900">Investment Account</h3>
+            {isLoading && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
             )}
           </div>
           
-          <div className="flex space-x-2">
-            <button
-              onClick={handleSave}
-              disabled={isLoading}
-              className="flex-1 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Saving...' : 'Save'}
-            </button>
-            <button
-              onClick={handleCancel}
-              disabled={isLoading}
-              className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-gray-900">Investment Account</h3>
-        <div className="flex items-center space-x-2">
+          {/* Lock/Unlock Toggle */}
           <button
-            onClick={() => onToggleLock(!isLocked)}
-            disabled={isLoading}
-            className={`p-1 rounded ${
-              isLocked 
-                ? 'text-red-600 hover:bg-red-50' 
-                : 'text-gray-400 hover:bg-gray-50'
-            } transition-colors disabled:opacity-50`}
-            title={isLocked ? 'Click to unlock editing' : 'Click to lock editing'}
+            onClick={handleToggleLock}
+            className={`p-1 rounded transition-colors ${
+              isLocked
+                ? 'text-red-600 hover:text-red-700 hover:bg-red-50'
+                : 'text-green-600 hover:text-green-700 hover:bg-green-50'
+            }`}
+            title={isLocked ? 'Click to unlock for editing' : 'Click to lock from editing'}
           >
             {isLocked ? (
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -168,44 +98,86 @@ const HighAprBalanceEditor: React.FC<HighAprBalanceEditorProps> = ({
             )}
           </button>
         </div>
+
+        {/* Balance Display/Editor */}
+        <div className="flex items-center space-x-2">
+          {isEditing ? (
+            <div className="flex items-center space-x-2">
+              <div className="relative">
+                <NumericFormat
+                  value={editValue}
+                  onValueChange={(values) => setEditValue(values.value || '')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSave();
+                    } else if (e.key === 'Escape') {
+                      handleCancel();
+                    }
+                  }}
+                  thousandSeparator=","
+                  prefix="$"
+                  placeholder="$0"
+                  className="px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  autoFocus
+                  allowNegative={true}
+                />
+              </div>
+              <button
+                onClick={handleSave}
+                className="px-2 py-1 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                Save
+              </button>
+              <button
+                onClick={handleCancel}
+                className="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div 
+              className={`flex items-center space-x-2 ${
+                !isLocked ? 'cursor-pointer hover:bg-gray-50 px-2 py-1 rounded' : ''
+              }`}
+              onClick={handleStartEdit}
+            >
+              <span className={`text-lg font-medium ${
+                currentBalance >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {formatCurrency(currentBalance)}
+              </span>
+              {!isLocked && (
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-      
-      <div 
-        className={`text-2xl font-bold ${
-          isLocked 
-            ? 'text-gray-500 cursor-not-allowed' 
-            : 'text-blue-600 cursor-pointer hover:text-blue-800'
-        } transition-colors`}
-        onClick={handleStartEdit}
-        title={isLocked ? 'Balance is locked' : 'Click to edit investment account balance'}
-      >
-        {isLoading ? (
-          <div className="flex items-center space-x-2">
-            <svg className="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span>Loading...</span>
-          </div>
-        ) : (
-          formatCurrency(currentBalance)
-        )}
-      </div>
-      
-      <p className="text-xs text-gray-500 mt-1">
+
+      {/* Error Message */}
+      {error && (
+        <div className="mt-2 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      {/* Lock Status Indicator */}
+      <div className="mt-2 text-xs text-gray-500">
         {isLocked ? (
-          <>
-            <span className="inline-flex items-center">
-              <svg className="w-3 h-3 mr-1 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-              </svg>
-              Balance is locked
-            </span>
-          </>
+          <span className="flex items-center space-x-1">
+            <span>🔒</span>
+            <span>Balance is locked</span>
+          </span>
         ) : (
-          'Click to edit • Separate from cashflow calculations'
+          <span className="flex items-center space-x-1">
+            <span>🔓</span>
+            <span>Click balance to edit • Separate from cashflow calculations</span>
+          </span>
         )}
-      </p>
+      </div>
     </div>
   );
 };
