@@ -17,7 +17,8 @@ import ClientPayments from './components/ClientPayments/ClientPayments';
 import { calculateWeeklyCashflowsWithCampfireProjections } from './services/cashflowCalculationService';
 import { getSharedClientPaymentService } from './services/clientPaymentServiceShared';
 import { getBeginningBalanceService } from './services/beginningBalanceService';
-import BeginningBalanceEditor from './components/BeginningBalance/BeginningBalanceEditor';
+import { getHighAprBalanceService } from './services/highAprBalanceService';
+import CashPositionSummary from './components/BeginningBalance/CashPositionSummary';
 import CalendarView from './components/Calendar/CalendarView';
 
 type ActiveView = 'upload' | 'cashflow' | 'dataManagement' | 'campfireData' | 'calendar';
@@ -130,6 +131,9 @@ function DatabaseApp() {
   const [beginningBalance, setBeginningBalance] = useState<number>(0);
   const [isBalanceLocked, setIsBalanceLocked] = useState<boolean>(false);
   const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(false);
+  const [highAprBalance, setHighAprBalance] = useState<number>(0);
+  const [isHighAprLocked, setIsHighAprLocked] = useState<boolean>(false);
+  const [isLoadingHighApr, setIsLoadingHighApr] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -251,6 +255,7 @@ function DatabaseApp() {
     loadEstimatesFromDatabase();
     loadClientPayments();
     loadBeginningBalance();
+    loadHighAprBalance();
     
     // Load bank balances
     const loadBankBalances = async () => {
@@ -265,7 +270,7 @@ function DatabaseApp() {
     };
     loadBankBalances();
     
-  }, [currentUser?.uid]);
+  }, [currentUser?.uid]); // Note: loadHighAprBalance is in dependency as useCallback
 
   // Calculate weekly cashflows when data changes
   const weeklyCashflows: WeeklyCashflowWithProjections[] = React.useMemo(() => {
@@ -805,6 +810,72 @@ function DatabaseApp() {
     }
   }, [currentUser?.uid, beginningBalance]);
 
+  // High APR Balance Management Functions
+  const loadHighAprBalance = useCallback(async () => {
+    if (!currentUser?.uid) return;
+    
+    setIsLoadingHighApr(true);
+    console.log('💰 Loading high APR balance from Firebase...');
+    
+    try {
+      const aprBalanceService = getHighAprBalanceService(currentUser.uid);
+      const balanceData = await aprBalanceService.getHighAprBalance();
+      
+      if (balanceData) {
+        setHighAprBalance(balanceData.balance);
+        setIsHighAprLocked(balanceData.isLocked);
+        console.log('✅ Loaded high APR balance:', balanceData.balance, 'locked:', balanceData.isLocked);
+      } else {
+        // No balance found, use defaults
+        setHighAprBalance(0);
+        setIsHighAprLocked(false);
+        console.log('📊 No high APR balance found, using defaults');
+      }
+    } catch (error: any) {
+      console.error('💥 Error loading high APR balance:', error);
+      setError(`Failed to load high APR balance: ${error.message}`);
+      // Use defaults on error
+      setHighAprBalance(0);
+      setIsHighAprLocked(false);
+    } finally {
+      setIsLoadingHighApr(false);
+    }
+  }, [currentUser?.uid]);
+
+  const updateHighAprBalance = useCallback(async (newBalance: number) => {
+    if (!currentUser?.uid) return;
+    
+    try {
+      setIsLoadingHighApr(true);
+      const aprBalanceService = getHighAprBalanceService(currentUser.uid);
+      await aprBalanceService.updateHighAprBalance(newBalance, isHighAprLocked);
+      setHighAprBalance(newBalance);
+      console.log('✅ Updated high APR balance to:', newBalance);
+    } catch (error: any) {
+      console.error('💥 Error updating high APR balance:', error);
+      setError(`Failed to update high APR balance: ${error.message}`);
+    } finally {
+      setIsLoadingHighApr(false);
+    }
+  }, [currentUser?.uid, isHighAprLocked]);
+
+  const toggleHighAprLock = useCallback(async (locked: boolean) => {
+    if (!currentUser?.uid) return;
+    
+    try {
+      setIsLoadingHighApr(true);
+      const aprBalanceService = getHighAprBalanceService(currentUser.uid);
+      await aprBalanceService.updateHighAprBalance(highAprBalance, locked);
+      setIsHighAprLocked(locked);
+      console.log('✅ Toggled high APR lock to:', locked);
+    } catch (error: any) {
+      console.error('💥 Error toggling high APR lock:', error);
+      setError(`Failed to update high APR lock status: ${error.message}`);
+    } finally {
+      setIsLoadingHighApr(false);
+    }
+  }, [currentUser?.uid, highAprBalance]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -1043,16 +1114,19 @@ function DatabaseApp() {
         {/* Cashflow Table View */}
         {activeView === 'cashflow' && (
           <div className="px-4 sm:px-0">
-            {/* Beginning Balance Editor */}
-            <div className="mb-6">
-              <BeginningBalanceEditor
-                currentBalance={beginningBalance}
-                isLocked={isBalanceLocked}
-                onUpdateBalance={updateBeginningBalance}
-                onToggleLock={toggleBalanceLock}
-                isLoading={isLoadingBalance}
-              />
-            </div>
+            {/* Cash Position Summary */}
+            <CashPositionSummary
+              operatingBalance={beginningBalance}
+              isOperatingLocked={isBalanceLocked}
+              onUpdateOperatingBalance={updateBeginningBalance}
+              onToggleOperatingLock={toggleBalanceLock}
+              isLoadingOperating={isLoadingBalance}
+              highAprBalance={highAprBalance}
+              isHighAprLocked={isHighAprLocked}
+              onUpdateHighAprBalance={updateHighAprBalance}
+              onToggleHighAprLock={toggleHighAprLock}
+              isLoadingHighApr={isLoadingHighApr}
+            />
             
             {/* Estimates Toggle */}
             <div className="mb-6 flex items-center justify-between bg-gray-50 p-4 rounded-lg">

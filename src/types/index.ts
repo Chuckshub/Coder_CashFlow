@@ -397,3 +397,14 @@ export interface BeginningBalance {
   lastModifiedBy: string;
   notes?: string;
 }
+
+export interface HighAprBalance {
+  id: string;
+  userId: string;
+  balance: number;
+  isLocked: boolean;
+  lastModified: Date;
+  lastModifiedBy: string;
+  createdAt: Date;
+  notes?: string;
+}
