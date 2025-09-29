@@ -125,6 +125,7 @@ function DatabaseApp() {
   const [activeView, setActiveView] = useState<ActiveView>('upload');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [showEstimates, setShowEstimates] = useState<boolean>(true);
   const [clientPayments, setClientPayments] = useState<ClientPayment[]>([]);
   const [beginningBalance, setBeginningBalance] = useState<number>(0);
   const [isBalanceLocked, setIsBalanceLocked] = useState<boolean>(false);
@@ -1053,6 +1054,23 @@ function DatabaseApp() {
               />
             </div>
             
+            {/* Estimates Toggle */}
+            <div className="mb-6 flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">Display Options</h3>
+                <p className="text-xs text-gray-500 mt-1">Toggle estimates visibility in cashflow projections</p>
+              </div>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={showEstimates}
+                  onChange={(e) => setShowEstimates(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Show Estimates</span>
+              </label>
+            </div>
+            
             {weeklyCashflows.length > 0 ? (
               <CashflowTableWithProjections
                 weeklyCashflows={weeklyCashflows}
@@ -1063,6 +1081,8 @@ function DatabaseApp() {
                 onEstimateClick={handleEstimateClick}
                 onRefreshData={refreshAllData}
                 onBankBalanceUpdate={handleBankBalanceUpdate}
+                showEstimates={showEstimates}
+                showClientProjections={true}
               />
             ) : (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">

@@ -25,6 +25,7 @@ interface CashflowTableWithProjectionsProps {
   onEstimateClick?: (estimateId: string) => void;
   onRefreshData?: () => void;
   onBankBalanceUpdate?: (weekNumber: number, actualBalance: number | null) => void;
+  showEstimates?: boolean;
   showClientProjections?: boolean;
 }
 
@@ -110,6 +111,7 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
   onEstimateClick,
   onRefreshData,
   onBankBalanceUpdate,
+  showEstimates = true,
   showClientProjections = true
 }) => {
   const [modalState, setModalState] = useState<ModalState>({
@@ -298,7 +300,7 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                         <div className={`text-sm font-medium ${getCurrencyColor(weekData.actualInflow)}`}>
                           {formatCurrency(weekData.actualInflow)}
                         </div>
-                        {weekData.estimatedInflow > 0 ? (
+                        {showEstimates && (weekData.estimatedInflow > 0 ? (
                           <button
                             onClick={() => openEstimatesListModal(
                               weekData.weekNumber, 
@@ -318,7 +320,7 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                           >
                             + Add Estimate
                           </button>
-                        )}
+                        ))}
                       </div>
                       
                       {/* Client Payment Projections */}
@@ -353,10 +355,10 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                     {/* Outflows */}
                     <td className="px-6 py-4 text-right">
                       <div className="space-y-1">
-                        <div className={`text-sm font-medium ${getCurrencyColor(-weekData.actualOutflow)}`}>
+                        <div className={`text-sm font-medium ${getCurrencyColor(weekData.actualOutflow)}`}>
                           {formatCurrency(weekData.actualOutflow)}
                         </div>
-                        {weekData.estimatedOutflow > 0 ? (
+                        {showEstimates && (weekData.estimatedOutflow > 0 ? (
                           <button
                             onClick={() => openEstimatesListModal(
                               weekData.weekNumber, 
@@ -376,7 +378,7 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                           >
                             + Add Estimate
                           </button>
-                        )}
+                        ))}
                       </div>
                     </td>
                     
@@ -393,14 +395,16 @@ const CashflowTableWithProjections: React.FC<CashflowTableWithProjectionsProps> 
                       </div>
                       
                       {/* With Estimates */}
-                      <div className="space-y-1 mt-3 pt-2 border-t border-gray-100">
-                        <div className="text-xs text-gray-500 uppercase tracking-wider font-medium">
-                          Net (w/ Estimates)
+                      {showEstimates && (
+                        <div className="space-y-1 mt-3 pt-2 border-t border-gray-100">
+                          <div className="text-xs text-gray-500 uppercase tracking-wider font-medium">
+                            Net (w/ Estimates)
+                          </div>
+                          <div className={`text-sm font-medium ${getCurrencyColor(weekData.netCashflowWithEstimates)}`}>
+                            {formatCurrency(weekData.netCashflowWithEstimates)}
+                          </div>
                         </div>
-                        <div className={`text-sm font-medium ${getCurrencyColor(weekData.netCashflowWithEstimates)}`}>
-                          {formatCurrency(weekData.netCashflowWithEstimates)}
-                        </div>
-                      </div>
+                      )}
                     </td>
                     
                     {/* Running Balance Column */}
