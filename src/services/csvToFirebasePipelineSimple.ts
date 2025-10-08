@@ -2,7 +2,6 @@ import { RawTransaction, Transaction } from '../types';
 import { parseCSVFile, convertToTransaction, validateCSVStructure } from '../utils/csvParser';
 import { categorizeTransactions } from '../utils/transactionCategorizer';
 import { createTransactionHashFromProcessed } from '../utils/transactionHash';
-import { removeSimilarDuplicates } from '../utils/smartDuplicateDetection';
 import { getSimpleFirebaseService } from './firebaseServiceSimple';
 
 // ============================================================================
@@ -121,38 +120,9 @@ export class SimpleCSVToFirebasePipeline {
 
       console.log('✅ Processed', processedTransactions.length, 'transactions with hashes');
       
-      // Stage 3.5: Smart Duplicate Detection
-      console.log('🔍 Running smart duplicate detection...');
-      const duplicateResult = removeSimilarDuplicates(processedTransactions as Transaction[], {
-        maxDateDifferenceHours: 72, // 3 days
-        descriptionSimilarityThreshold: 0.85, // 85% similarity for conservative detection
-        allowAmountVariance: 0 // Exact amount match required
-      });
-      
-      processedTransactions = duplicateResult.unique as Transaction[];
-      
-      if (duplicateResult.removed.length > 0) {
-        console.log(`⚠️ Found ${duplicateResult.removed.length} potential duplicates:`);
-        duplicateResult.groups.forEach((group, i) => {
-          console.log(`  Group ${i + 1}: ${group.length} similar transactions`);
-          group.forEach(t => {
-            const data = 'originalData' in t ? 
-              { date: t.date, amount: t.amount, desc: t.description } :
-              { date: new Date((t as any)['Posting Date']), amount: Math.abs((t as any).Amount), desc: (t as any).Description };
-            console.log(`    - ${data.date.toDateString()} $${data.amount} "${data.desc.substring(0, 40)}..."`);
-          });
-        });
-        
-        this.updateProgress({
-          stage: 'processing',
-          message: `Removed ${duplicateResult.removed.length} potential duplicates`,
-          progress: 75,
-          completed: processedTransactions.length,
-          total: rawTransactions.length
-        });
-      }
-
       // Stage 4: Upload to Firebase (MUCH SIMPLER!)
+      // Duplicate detection happens at the database level - Firestore uses transaction hash as document ID,
+      // so duplicates from previous uploads are automatically prevented
       this.updateProgress({
         stage: 'uploading',
         message: 'Uploading to Firebase...',

@@ -2,7 +2,6 @@ import { RawTransaction, Transaction } from '../types';
 import { parseCSVFile, convertToTransaction, validateCSVStructure } from '../utils/csvParser';
 import { categorizeTransactions } from '../utils/transactionCategorizer';
 import { createTransactionHashFromProcessed } from '../utils/transactionHash';
-import { removeSimilarDuplicates } from '../utils/smartDuplicateDetection';
 import { getSharedFirebaseService } from './firebaseServiceSharedWrapper';
 
 // ============================================================================
@@ -157,34 +156,21 @@ export class SharedCSVToFirebasePipeline {
       
       console.log('✅ Hash generation completed');
 
-      // Stage 5: Remove similar duplicates within the current batch
-      this.updateProgress({
-        stage: 'processing',
-        message: 'Removing similar duplicates...',
-        progress: 70,
-        errors: result.errors
-      });
-
-      const deduplicationResult = removeSimilarDuplicates(transactionsWithHashes);
-      const deduplicatedTransactions = deduplicationResult.unique as Transaction[];
-      const localDuplicatesRemoved = deduplicationResult.removed.length;
-      
-      console.log('✅ Local duplicate removal completed:', localDuplicatesRemoved, 'duplicates removed');
-
-      // Stage 6: Upload to shared Firebase
+      // Stage 5: Upload to shared Firebase
+      // Duplicate detection happens at the database level
       this.updateProgress({
         stage: 'uploading',
         message: 'Uploading to shared collection...',
         progress: 75,
         completed: 0,
-        total: deduplicatedTransactions.length,
+        total: transactionsWithHashes.length,
         errors: result.errors
       });
 
       const firebaseService = getSharedFirebaseService(this.userId);
       
       const uploadResult = await firebaseService.uploadTransactions(
-        deduplicatedTransactions,
+        transactionsWithHashes,
         'System', // userName
         'system@shared.local', // userEmail
         (uploaded, total, duplicates) => {
@@ -200,13 +186,13 @@ export class SharedCSVToFirebasePipeline {
       );
 
       result.uploaded = uploadResult.uploaded;
-      result.duplicates = uploadResult.duplicates + localDuplicatesRemoved;
+      result.duplicates = uploadResult.duplicates;
       result.errors.push(...uploadResult.errors);
-      result.uploadedHashes = deduplicatedTransactions
+      result.uploadedHashes = transactionsWithHashes
         .slice(0, uploadResult.uploaded)
         .map(t => t.hash || '');
 
-      // Stage 7: Complete
+      // Stage 6: Complete
       const endTime = Date.now();
       result.processingTimeMs = endTime - startTime;
       result.success = uploadResult.success;
@@ -218,7 +204,7 @@ export class SharedCSVToFirebasePipeline {
           : `Upload failed: ${result.errors.join('; ')}`,
         progress: 100,
         completed: result.uploaded,
-        total: deduplicatedTransactions.length,
+        total: transactionsWithHashes.length,
         errors: result.errors
       });
 
